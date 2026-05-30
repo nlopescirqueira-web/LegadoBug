@@ -122,8 +122,8 @@ function FilterDropdown({
     if (!showCounts || !questions.length) return null;
     if (label === 'Ano') {
       return questions.filter(q => {
-        const qYear = q.year === null || q.year === undefined ? '' : String(q.year);
-        return normalizeString(qYear) === normalizeString(opt);
+        const qYear = q.year === null || q.year === undefined ? '' : String(q.year).trim();
+        return qYear !== '' && opt.trim() === qYear;
       }).length;
     }
     return null;
@@ -410,10 +410,10 @@ export default function Questions() {
       const matchAssunto = advFilters.assunto.length === 0 || 
         advFilters.assunto.some(a => normalizeString(a) === normalizeString(q.topic));
       
-      const matchAno = advFilters.ano.length === 0 || 
+      const matchAno = advFilters.ano.length === 0 ||
         advFilters.ano.some(yearStr => {
-          const qYear = q.year === null || q.year === undefined ? '' : String(q.year);
-          return normalizeString(yearStr) === normalizeString(qYear);
+          const qYear = q.year === null || q.year === undefined ? '' : String(q.year).trim();
+          return qYear !== '' && yearStr.trim() === qYear;
         });
       
       const matchBanca = advFilters.banca.length === 0 || 
@@ -426,10 +426,13 @@ export default function Questions() {
           return normalizeString(i) === normalizeString(normalizedOrg);
         });
       
+      const qDifficulty = normalizeString(q.difficulty);
       const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty));
-      
-      const hasVideo = !!(q.video_url || q.videoUrl);
+        qDifficulty === '' ||
+        advFilters.dificuldade.some(d => normalizeString(d) === qDifficulty);
+
+      const videoUrl = String(q.video_url || q.videoUrl || '').trim();
+      const hasVideo = videoUrl !== '' && videoUrl !== 'null' && videoUrl !== 'undefined';
       const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 || (
         (advFilters.videoRes.some(v => normalizeString(v) === 'sim') && hasVideo) ||
         (advFilters.videoRes.some(v => normalizeString(v) === 'nao') && !hasVideo)
@@ -480,10 +483,13 @@ export default function Questions() {
           return normalizeString(i) === normalizeString(normalizedOrg);
         });
 
+      const qDifficulty = normalizeString(q.difficulty);
       const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        advFilters.dificuldade.some((d: string) => normalizeString(d) === normalizeString(q.difficulty));
+        qDifficulty === '' ||
+        advFilters.dificuldade.some((d: string) => normalizeString(d) === qDifficulty);
 
-      const hasVideo = !!(q.video_url || q.videoUrl);
+      const videoUrl = String(q.video_url || q.videoUrl || '').trim();
+      const hasVideo = videoUrl !== '' && videoUrl !== 'null' && videoUrl !== 'undefined';
       const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 || (
         (advFilters.videoRes.some((v: string) => normalizeString(v) === 'sim') && hasVideo) ||
         (advFilters.videoRes.some((v: string) => normalizeString(v) === 'nao') && !hasVideo)
@@ -587,10 +593,11 @@ export default function Questions() {
       })
     ]);
     
-    const dificuldade = getUniqueCaseInsensitive([
-      'Fácil', 'Médio', 'Difícil',
-      ...questions.map(q => q.difficulty)
-    ]);
+    const standardDifficulties = ['Fácil', 'Médio', 'Difícil'];
+    const extraDifficulties = getUniqueCaseInsensitive(
+      questions.map(q => q.difficulty)
+    ).filter(d => !standardDifficulties.some(s => normalizeString(s) === normalizeString(d)));
+    const dificuldade = [...standardDifficulties, ...extraDifficulties];
     const videoRes = ['Sim', 'Não'];
     
     const relevantForAssunto = advFilters.disciplina.length === 0 
@@ -1329,7 +1336,7 @@ export default function Questions() {
                               </Markdown>
                             </div>
                             
-                            {q.video_url && (
+                            {q.video_url && String(q.video_url).trim() !== '' && String(q.video_url).trim() !== 'null' && (
                               <div className='mt-4 w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black'>
                                 <iframe width='100%' height='100%' src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} title='Resolução em Vídeo' frameBorder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowFullScreen></iframe>
                               </div>
