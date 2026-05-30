@@ -426,8 +426,8 @@ export default function Questions() {
           return normalizeString(i) === normalizeString(normalizedOrg);
         });
       
-      const matchDificuldade = advFilters.dificuldade.length === 0 || 
-        advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty || 'Médio'));
+      const matchDificuldade = advFilters.dificuldade.length === 0 ||
+        advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty));
       
       const hasVideo = !!(q.video_url || q.videoUrl);
       const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 || (
@@ -456,6 +456,42 @@ export default function Questions() {
       return matchSearch && matchDisciplina && matchAssunto && matchAno && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
     });
   }, [questions, advFilters, searchTerm, questionAnswers]);
+
+  const questionsForYearCount = useMemo(() => {
+    return questions.filter(q => {
+      const matchSearch = !searchTerm ||
+        q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        q.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.topic && q.topic.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchDisciplina = advFilters.disciplina.length === 0 ||
+        advFilters.disciplina.some((d: string) => normalizeString(normalizeSubject(d)) === normalizeString(normalizeSubject(q.subject)));
+
+      const matchAssunto = advFilters.assunto.length === 0 ||
+        advFilters.assunto.some((a: string) => normalizeString(a) === normalizeString(q.topic));
+
+      const matchBanca = advFilters.banca.length === 0 ||
+        advFilters.banca.some((b: string) => normalizeString(b) === normalizeString(q.institution));
+
+      const matchInstituicao = advFilters.instituicao.length === 0 ||
+        advFilters.instituicao.some((i: string) => {
+          const org = q.org || '';
+          const normalizedOrg = org.toLowerCase().includes('polícia militar do estado de são paulo') ? 'PMSP' : org;
+          return normalizeString(i) === normalizeString(normalizedOrg);
+        });
+
+      const matchDificuldade = advFilters.dificuldade.length === 0 ||
+        advFilters.dificuldade.some((d: string) => normalizeString(d) === normalizeString(q.difficulty));
+
+      const hasVideo = !!(q.video_url || q.videoUrl);
+      const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 || (
+        (advFilters.videoRes.some((v: string) => normalizeString(v) === 'sim') && hasVideo) ||
+        (advFilters.videoRes.some((v: string) => normalizeString(v) === 'nao') && !hasVideo)
+      );
+
+      return matchSearch && matchDisciplina && matchAssunto && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
+    });
+  }, [questions, advFilters.disciplina, advFilters.assunto, advFilters.banca, advFilters.instituicao, advFilters.dificuldade, advFilters.videoRes, searchTerm]);
 
   const filtersActive = useMemo(() => {
     return searchTerm !== '' || 
@@ -527,10 +563,10 @@ export default function Questions() {
       return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
     };
 
-    const disciplina = Array.from(new Set([
+    const disciplina = getUniqueCaseInsensitive([
       'Português', 'Sociologia', 'Inglês', 'Espanhol', 'Direito Administrativo',
-      ...getUniqueCaseInsensitive(questions.map(q => normalizeSubject(q.subject)))
-    ])).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+      ...questions.map(q => normalizeSubject(q.subject))
+    ]);
 
     const ano = Array.from(new Set(questions.map(q => {
       const y = q.year;
@@ -542,16 +578,19 @@ export default function Questions() {
     
     const banca = getUniqueCaseInsensitive(questions.map(q => q.institution)).map(s => s.trim());
 
-    const instituicao = Array.from(new Set([
+    const instituicao = getUniqueCaseInsensitive([
       'APMBB', 'PMSP',
-      ...getUniqueCaseInsensitive(questions.map(q => {
+      ...questions.map(q => {
         const org = q.org;
         if (org && org.toLowerCase().includes('polícia militar do estado de são paulo')) return 'PMSP';
         return org;
-      }))
-    ])).map(s => s.trim()).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+      })
+    ]);
     
-    const dificuldade = ['Fácil', 'Médio', 'Difícil'];
+    const dificuldade = getUniqueCaseInsensitive([
+      'Fácil', 'Médio', 'Difícil',
+      ...questions.map(q => q.difficulty)
+    ]);
     const videoRes = ['Sim', 'Não'];
     
     const relevantForAssunto = advFilters.disciplina.length === 0 
@@ -800,13 +839,13 @@ export default function Questions() {
                         selected={advFilters.dificuldade} 
                         onChange={(val) => setAdvFilters(prev => ({ ...prev, dificuldade: val }))} 
                       />
-                      <FilterDropdown 
-                        label="Ano" 
-                        options={uniqueValues.ano} 
-                        selected={advFilters.ano} 
-                        onChange={(val) => setAdvFilters(prev => ({ ...prev, ano: val }))} 
+                      <FilterDropdown
+                        label="Ano"
+                        options={uniqueValues.ano}
+                        selected={advFilters.ano}
+                        onChange={(val) => setAdvFilters(prev => ({ ...prev, ano: val }))}
                         showCounts={true}
-                        questions={questions}
+                        questions={questionsForYearCount}
                       />
                     </div>
 
@@ -1031,6 +1070,7 @@ export default function Questions() {
                       )}
 
                       {/* Ano */}
+                      {q.year != null && (
                       <button
                         onClick={() => toggleFilter('ano', String(q.year))}
                         className={cn(
@@ -1040,9 +1080,10 @@ export default function Questions() {
                             : "bg-white/[0.05] border-white/10 text-white/90 hover:bg-white/10 hover:border-white/20"
                         )}
                       >
-                        <Calendar size={11} className={advFilters.ano.some(y => normalizeString(y) === normalizeString(String(q.year))) ? "text-white" : "text-[#3B82F6]/50"} /> 
+                        <Calendar size={11} className={advFilters.ano.some(y => normalizeString(y) === normalizeString(String(q.year))) ? "text-white" : "text-[#3B82F6]/50"} />
                         <span className="opacity-40">Ano:</span> {q.year}
                       </button>
+                      )}
 
                       {/* Banca */}
                       <button
@@ -1079,18 +1120,20 @@ export default function Questions() {
                       )}
 
                       {/* Dificuldade */}
+                      {q.difficulty && (
                       <button
-                        onClick={() => toggleFilter('dificuldade', q.difficulty || 'Médio')}
+                        onClick={() => toggleFilter('dificuldade', q.difficulty)}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap",
-                          advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty || 'Médio'))
+                          advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty))
                             ? "bg-[#3B82F6] text-white border-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                             : "bg-white/[0.05] border-white/10 text-white/90 hover:bg-white/10 hover:border-white/20"
                         )}
                       >
-                        <BrainCircuit size={11} className={advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty || 'Médio')) ? "text-white" : "text-[#3B82F6]/50"} /> 
-                        <span className="opacity-40">Dificuldade:</span> {q.difficulty || 'Médio'}
+                        <BrainCircuit size={11} className={advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty)) ? "text-white" : "text-[#3B82F6]/50"} />
+                        <span className="opacity-40">Dificuldade:</span> {q.difficulty}
                       </button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0 ml-auto pt-2 sm:pt-0">
