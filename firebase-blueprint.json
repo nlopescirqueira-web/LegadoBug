@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "student"] }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "InstitutionSchedule": {
+      "title": "Institution Schedule",
+      "description": "Global PDF URLs for each institution",
+      "type": "object",
+      "properties": {
+        "pdfUrls": {
+          "type": "object",
+          "description": "Map of week number to PDF URL"
+        }
+      }
+    },
+    "UserProgress": {
+      "title": "User Progress",
+      "description": "Tracks which weeks a specific user has unlocked for an institution",
+      "type": "object",
+      "properties": {
+        "unlockedWeeks": { 
+          "type": "array",
+          "items": { "type": "integer" }
+        }
+      },
+      "required": ["unlockedWeeks"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/schedules/{institutionId}": {
+      "schema": "InstitutionSchedule",
+      "description": "Global PDF URLs for each institution"
+    },
+    "/user_progress/{uid}/institutions/{institutionId}": {
+      "schema": "UserProgress",
+      "description": "Individual student progress"
+    }
+  }
+}

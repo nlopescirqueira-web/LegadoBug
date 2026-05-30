@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  html, body {
+    @apply bg-black text-white;
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  /* Optimize rendering for complex elements */
+  .optimize-gpu {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000;
+  }
+
+  /* Markdown Styles */
+  .markdown-body strong {
+    @apply font-black text-white;
+  }
+  .markdown-body em {
+    @apply italic text-white/80;
+  }
+  .markdown-body ul {
+    @apply list-disc list-inside space-y-1 my-2;
+  }
+  .markdown-body ol {
+    @apply list-decimal list-inside space-y-1 my-2;
+  }
+}
