@@ -392,12 +392,14 @@ export default function Questions() {
         const url = String(q.video_url || q.videoUrl || '').trim();
         return url !== '' && url !== 'null' && url !== 'undefined';
       });
+      const q0 = questions[0];
       console.log('%c[DIAGNÓSTICO FILTROS]', 'color: #3B82F6; font-weight: bold; font-size: 14px;');
       console.log('Total de questões:', questions.length);
       console.log('Anos no banco:', years);
+      console.log('Tipo do year:', typeof q0?.year, '| Valor:', JSON.stringify(q0?.year));
       console.log('Dificuldades no banco:', difficulties);
+      console.log('Tipo do difficulty:', typeof q0?.difficulty, '| Valor:', JSON.stringify(q0?.difficulty));
       console.log('Questões com vídeo:', videos.length);
-      console.log('Exemplo de questão:', JSON.stringify(questions[0], null, 2));
     }
   }, [questions]);
 
@@ -405,9 +407,14 @@ export default function Questions() {
     setAdvFilters(prev => {
       const list = prev[key];
       if (Array.isArray(list)) {
-        const isAlreadySelected = list.some(item => normalizeString(item) === normalizeString(value));
+        const compare = (a: string, b: string) => {
+          if (key === 'ano') return Number(a) === Number(b);
+          if (key === 'dificuldade') return normalizeDifficulty(a) === normalizeDifficulty(b);
+          return normalizeString(a) === normalizeString(b);
+        };
+        const isAlreadySelected = list.some(item => compare(item, value));
         const nextList = isAlreadySelected
-          ? list.filter(item => normalizeString(item) !== normalizeString(value))
+          ? list.filter(item => !compare(item, value))
           : [...list, value.trim()];
         
         let nextAssunto = prev.assunto;
@@ -439,7 +446,6 @@ export default function Questions() {
         disciplina: advFilters.disciplina,
         banca: advFilters.banca,
         videoRes: advFilters.videoRes,
-        exclude: advFilters.exclude
       }, null, 2));
     }
 
@@ -456,13 +462,9 @@ export default function Questions() {
       const matchAssunto = advFilters.assunto.length === 0 ||
         advFilters.assunto.some(a => normalizeString(a) === normalizeString(q.topic));
 
-      const qYearStr = q.year != null ? String(q.year) : '';
+      const qYearNum = q.year != null ? Number(q.year) : NaN;
       const matchAno = advFilters.ano.length === 0 ||
-        advFilters.ano.some(a => {
-          const filterVal = normalizeString(a);
-          const questionVal = normalizeString(qYearStr);
-          return filterVal === questionVal || a === qYearStr || Number(a) === q.year;
-        });
+        advFilters.ano.some(a => Number(a) === qYearNum);
 
       const matchBanca = advFilters.banca.length === 0 ||
         advFilters.banca.some(b => normalizeString(b) === normalizeString(q.institution));
@@ -476,11 +478,7 @@ export default function Questions() {
 
       const qDiffNorm = normalizeDifficulty(q.difficulty);
       const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        advFilters.dificuldade.some(d => {
-          const filterVal = normalizeString(d);
-          const questionVal = normalizeString(qDiffNorm);
-          return filterVal === questionVal;
-        });
+        advFilters.dificuldade.some(d => normalizeDifficulty(d) === qDiffNorm);
 
       const qVideoStatus = getVideoStatus(q);
       const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 ||
@@ -510,16 +508,15 @@ export default function Questions() {
         debugCount++;
         console.log(`%c[QUESTÃO REJEITADA #${debugCount}]`, 'color: #EF4444; font-weight: bold;', {
           id: q.id,
-          year: q.year,
+          yearRaw: q.year,
           yearType: typeof q.year,
+          yearAsNumber: qYearNum,
           difficulty: q.difficulty,
           difficultyNormalized: qDiffNorm,
           subject: q.subject,
           matchSearch, matchDisciplina, matchAssunto, matchAno, matchBanca, matchInstituicao, matchDificuldade, matchVideo,
           filterAno: advFilters.ano,
           filterDificuldade: advFilters.dificuldade,
-          comparacaoAno: advFilters.ano.length > 0 ? `"${normalizeString(advFilters.ano[0])}" vs "${normalizeString(qYearStr)}"` : 'N/A',
-          comparacaoDificuldade: advFilters.dificuldade.length > 0 ? `"${normalizeString(advFilters.dificuldade[0])}" vs "${normalizeString(qDiffNorm)}"` : 'N/A'
         });
       }
 
@@ -1107,12 +1104,12 @@ export default function Questions() {
                         onClick={() => toggleFilter('ano', String(q.year))}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap",
-                          advFilters.ano.some(y => normalizeString(y) === normalizeString(String(q.year)))
+                          advFilters.ano.some(y => Number(y) === Number(q.year))
                             ? "bg-[#3B82F6] text-white border-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                             : "bg-white/[0.05] border-white/10 text-white/90 hover:bg-white/10 hover:border-white/20"
                         )}
                       >
-                        <Calendar size={11} className={advFilters.ano.some(y => normalizeString(y) === normalizeString(String(q.year))) ? "text-white" : "text-[#3B82F6]/50"} />
+                        <Calendar size={11} className={advFilters.ano.some(y => Number(y) === Number(q.year)) ? "text-white" : "text-[#3B82F6]/50"} />
                         <span className="opacity-40">Ano:</span> {q.year}
                       </button>
                       )}
@@ -1157,12 +1154,12 @@ export default function Questions() {
                         onClick={() => toggleFilter('dificuldade', normalizeDifficulty(q.difficulty))}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap",
-                          advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)))
+                          advFilters.dificuldade.some(d => normalizeDifficulty(d) === normalizeDifficulty(q.difficulty))
                             ? "bg-[#3B82F6] text-white border-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                             : "bg-white/[0.05] border-white/10 text-white/90 hover:bg-white/10 hover:border-white/20"
                         )}
                       >
-                        <BrainCircuit size={11} className={advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty))) ? "text-white" : "text-[#3B82F6]/50"} />
+                        <BrainCircuit size={11} className={advFilters.dificuldade.some(d => normalizeDifficulty(d) === normalizeDifficulty(q.difficulty)) ? "text-white" : "text-[#3B82F6]/50"} />
                         <span className="opacity-40">Dificuldade:</span> {normalizeDifficulty(q.difficulty)}
                       </button>
                       )}

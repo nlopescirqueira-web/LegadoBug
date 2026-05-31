@@ -198,7 +198,7 @@ export default function SmartImport({ onComplete }: { onComplete: () => void }) 
           text: q.text || '',
           options: options,
           correct_option_index: correctIndex,
-          year: batchYear ? parseInt(batchYear) : (q.year || new Date().getFullYear()),
+          year: parseInt(String(batchYear || q.year || new Date().getFullYear()), 10) || new Date().getFullYear(),
           institution: batchInstitution || q.institution || 'VUNESP',
           org: org,
           difficulty: batchDifficulty || q.difficulty || 'Médio',
