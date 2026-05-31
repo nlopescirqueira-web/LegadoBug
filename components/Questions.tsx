@@ -3,16 +3,16 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Markdown from 'react-markdown';
-import { 
-  BookOpen, 
-  Search, 
-  Filter, 
-  ChevronDown, 
-  Loader2, 
-  Plus, 
+import {
+  BookOpen,
+  Search,
+  Filter,
+  ChevronDown,
+  Loader2,
+  Plus,
   Check,
-  CheckCircle2, 
-  XCircle, 
+  CheckCircle2,
+  XCircle,
   HelpCircle,
   Calendar,
   Building2,
@@ -32,7 +32,12 @@ import {
   Star,
   FileText,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Play,
+  Pencil,
+  X,
+  FolderInput,
+  Video
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -323,7 +328,14 @@ export default function Questions() {
   });
 
   const [activeTopTab, setActiveTopTab] = useState<'filter' | 'notebooks' | 'saved_filters'>('filter');
-  
+
+  // Notebook solving mode
+  const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
+
+  // Video editing modal (admin only)
+  const [editingVideoQuestionId, setEditingVideoQuestionId] = useState<string | null>(null);
+  const [editingVideoUrl, setEditingVideoUrl] = useState('');
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -333,7 +345,7 @@ export default function Questions() {
   const [tempAnswers, setTempAnswers] = useState<Record<string, number>>({});
   const [cutOptions, setCutOptions] = useState<Record<string, number[]>>({});
   const [showFeedback, setShowFeedback] = useState<Record<string, boolean>>({});
-  const [activeTab, setActiveTab] = useState<Record<string, 'gabarito' | 'comentarios' | 'estatisticas'>>({});
+  const [activeTab, setActiveTab] = useState<Record<string, 'gabarito' | 'comentarios' | 'estatisticas' | 'video'>>({});
 
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
@@ -677,6 +689,55 @@ export default function Questions() {
         return { ...prev, [qId]: [...current, optIdx] };
       }
     });
+  };
+
+  // Notebook solving mode: get questions for the active notebook
+  const activeNotebook = activeNotebookId ? notebooks.find(n => n.id === activeNotebookId) : null;
+  const notebookQuestions = useMemo(() => {
+    if (!activeNotebook || !activeNotebook.questionIds) return [];
+    return questions.filter(q => activeNotebook.questionIds!.includes(q.id));
+  }, [activeNotebook, questions]);
+
+  const notebookPaginatedQuestions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return notebookQuestions.slice(startIndex, startIndex + itemsPerPage);
+  }, [notebookQuestions, currentPage]);
+
+  const notebookTotalPages = Math.ceil(notebookQuestions.length / itemsPerPage);
+
+  // Admin: save video URL to Supabase
+  const handleSaveVideoUrl = async (questionId: string, videoUrl: string) => {
+    const trimmedUrl = videoUrl.trim();
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({ video_url: trimmedUrl })
+        .eq('id', questionId);
+      if (error) throw error;
+      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, video_url: trimmedUrl } : q));
+      setEditingVideoQuestionId(null);
+      setEditingVideoUrl('');
+    } catch (err: any) {
+      alert('Erro ao salvar vídeo: ' + (err.message || 'Erro desconhecido'));
+    }
+  };
+
+  // Helper to load saved filter
+  const loadSavedFilter = (filters: any) => {
+    const { searchTerm: savedSearch, ...rest } = filters;
+    setSearchTerm(savedSearch || '');
+    setAdvFilters({
+      disciplina: rest.disciplina || [],
+      assunto: rest.assunto || [],
+      ano: rest.ano || [],
+      banca: rest.banca || [],
+      instituicao: rest.instituicao || [],
+      dificuldade: rest.dificuldade || [],
+      videoRes: rest.videoRes || [],
+      exclude: rest.exclude || { alreadyAnswered: false, incorrect: false, correct: false, lastWeek: false, lastMonth: false }
+    });
+    setActiveTopTab('filter');
+    setCurrentPage(1);
   };
 
   return (
@@ -1297,44 +1358,132 @@ export default function Questions() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1 border-t border-white/5 pt-4">
+                  <div className="flex items-center gap-1 border-t border-white/5 pt-4 flex-wrap">
                     <button
                       onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'gabarito' ? undefined : 'gabarito' }))}
                       className={cn(
                         "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                        activeTab[q.id] === 'gabarito' 
-                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                        activeTab[q.id] === 'gabarito'
+                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                           : "text-white/70 hover:text-white/100 hover:bg-white/5"
                       )}
                     >
                       <BookOpen size={14} />
-                      Gabarito Comentado
+                      Gabarito
                     </button>
+                    {getVideoStatus(q) === 'Sim' && (
+                      <button
+                        onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'video' ? undefined : 'video' }))}
+                        className={cn(
+                          "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          activeTab[q.id] === 'video'
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "text-white/70 hover:text-white/100 hover:bg-white/5"
+                        )}
+                      >
+                        <Play size={14} />
+                        Resolução em Vídeo
+                      </button>
+                    )}
                     <button
                       onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'comentarios' ? undefined : 'comentarios' }))}
                       className={cn(
                         "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                        activeTab[q.id] === 'comentarios' 
-                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                        activeTab[q.id] === 'comentarios'
+                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                           : "text-white/70 hover:text-white/100 hover:bg-white/5"
                       )}
                     >
                       <MessageSquare size={14} />
-                      Comentários de Alunos
+                      Comentários
                     </button>
                     <button
                       onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'estatisticas' ? undefined : 'estatisticas' }))}
                       className={cn(
                         "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                        activeTab[q.id] === 'estatisticas' 
-                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                        activeTab[q.id] === 'estatisticas'
+                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                           : "text-white/70 hover:text-white/100 hover:bg-white/5"
                       )}
                     >
                       <BarChart3 size={14} />
                       Estatísticas
                     </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setEditingVideoQuestionId(q.id);
+                          setEditingVideoUrl(q.video_url || '');
+                        }}
+                        className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-amber-400 hover:bg-amber-500/10"
+                        title="Editar link do vídeo"
+                      >
+                        <Pencil size={14} />
+                        Vídeo
+                      </button>
+                    )}
                   </div>
+
+                  {/* Video Edit Modal */}
+                  {editingVideoQuestionId === q.id && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4"
+                      onClick={() => setEditingVideoQuestionId(null)}
+                    >
+                      <motion.div
+                        initial={{ scale: 0.9 }}
+                        animate={{ scale: 1 }}
+                        className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-lg space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                            <Video size={16} className="text-amber-400" />
+                            Editar Link do Vídeo
+                          </h3>
+                          <button onClick={() => setEditingVideoQuestionId(null)} className="text-white/40 hover:text-white">
+                            <X size={20} />
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={editingVideoUrl}
+                          onChange={(e) => setEditingVideoUrl(e.target.value)}
+                          placeholder="Cole o link do YouTube aqui (ex: https://youtu.be/abc123)"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
+                        />
+                        {editingVideoUrl && (
+                          <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10 bg-black">
+                            <iframe
+                              width="100%" height="100%"
+                              src={editingVideoUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                              title="Preview" frameBorder="0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        )}
+                        <div className="flex gap-2 justify-end">
+                          {q.video_url && (
+                            <button
+                              onClick={() => handleSaveVideoUrl(q.id, '')}
+                              className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-500/20 transition-all"
+                            >
+                              Remover Vídeo
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleSaveVideoUrl(q.id, editingVideoUrl)}
+                            className="px-6 py-2 bg-amber-500 text-black rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
 
                   {/* Tab Content */}
                   <AnimatePresence mode="wait">
@@ -1357,12 +1506,6 @@ export default function Questions() {
                                 {q.explanation || "Esta questão ainda não possui um comentário técnico detalhado. Nossa equipe pedagógica está trabalhando para adicionar uma explicação completa em breve."}
                               </Markdown>
                             </div>
-                            
-                            {getVideoStatus(q) === 'Sim' && (
-                              <div className='mt-4 w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black'>
-                                <iframe width='100%' height='100%' src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} title='Resolução em Vídeo' frameBorder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowFullScreen></iframe>
-                              </div>
-                            )}
 
                             <div className="pt-4 border-t border-[#3B82F6]/10">
                               <h4 className="text-[10px] font-black text-[#3B82F6] uppercase tracking-widest mb-3">Por que a alternativa {String.fromCharCode(64 + (q.correct_option_index + 1))} é a correta?</h4>
@@ -1370,6 +1513,32 @@ export default function Questions() {
                                 O fundamento desta questão baseia-se na aplicação direta dos conceitos de {q.subject}, específicamente tratando de {q.topic || 'temas fundamentais da matéria'}. A banca {q.org?.toLowerCase().includes('polícia militar do estado de são paulo') ? 'PMSP' : q.org} costuma cobrar este padrão de raciocínio.
                               </p>
                             </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {activeTab[q.id] === 'video' && getVideoStatus(q) === 'Sim' && (
+                      <motion.div
+                        key="video"
+                        initial={{ opacity: 0, y: -10, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: 'auto' }}
+                        exit={{ opacity: 0, y: -10, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-6 mt-2">
+                          <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-4">
+                            <Play size={14} />
+                            Resolução em Vídeo
+                          </div>
+                          <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
+                            <iframe
+                              width="100%" height="100%"
+                              src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                              title="Resolução em Vídeo" frameBorder="0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
                           </div>
                         </div>
                       </motion.div>
@@ -1484,12 +1653,198 @@ export default function Questions() {
         </div>
       )}
 
-      {activeTopTab === 'notebooks' && (
-        <NotebooksView />
+      {activeTopTab === 'notebooks' && !activeNotebookId && (
+        <NotebooksView
+          onOpenNotebook={(id) => { setActiveNotebookId(id); setCurrentPage(1); }}
+        />
+      )}
+
+      {activeTopTab === 'notebooks' && activeNotebookId && activeNotebook && (
+        <div className="space-y-6">
+          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => { setActiveNotebookId(null); setCurrentPage(1); }}
+                className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all flex items-center gap-2"
+              >
+                <ChevronLeft size={20} />
+                <span className="text-xs font-bold uppercase tracking-widest">Voltar</span>
+              </button>
+              <div>
+                <h3 className="text-xl font-black text-white uppercase italic tracking-tight">{activeNotebook.title}</h3>
+                <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">{notebookQuestions.length} questões</p>
+              </div>
+            </div>
+          </div>
+
+          {notebookQuestions.length > 0 ? (
+            <div className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#0A0A0A] border border-[#3B82F6]/30 rounded-[2rem] p-6 flex items-center gap-4 shadow-[0_0_40px_-10px_rgba(59,130,246,0.2)]"
+              >
+                <div className="w-3 h-3 rounded-full bg-[#3B82F6] shadow-[0_0_15px_#3B82F6] animate-pulse" />
+                <span className="text-2xl font-black text-white italic uppercase tracking-tighter leading-none">
+                  {notebookQuestions.length} QUESTÕES
+                </span>
+                <span className="text-[10px] font-black text-[#3B82F6] uppercase tracking-[0.3em]">No caderno</span>
+              </motion.div>
+
+              {notebookPaginatedQuestions.map((q, pIdx) => {
+                const idx = (currentPage - 1) * itemsPerPage + pIdx;
+                return (
+                  <motion.div key={q.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 lg:p-8 space-y-6 hover:border-[#3B82F6]/20 transition-colors relative group/card"
+                  >
+                    <div className="absolute top-4 right-6 flex items-center gap-2 z-10">
+                      <span className="text-[11px] font-black text-white bg-[#3B82F6] px-4 py-2 rounded-xl border border-[#3B82F6]/30 uppercase tracking-widest shadow-[0_0_15px_-3px_#3B82F6]">
+                        QUESTÃO {idx + 1} DE {notebookQuestions.length}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20">
+                          <span className="opacity-50">Matéria:</span> {q.subject}
+                        </span>
+                        {q.year != null && (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/[0.05] border-white/10 text-white/90">
+                            <Calendar size={11} className="text-[#3B82F6]/50" />
+                            <span className="opacity-40">Ano:</span> {q.year}
+                          </span>
+                        )}
+                        {q.difficulty && (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/[0.05] border-white/10 text-white/90">
+                            <BrainCircuit size={11} className="text-[#3B82F6]/50" />
+                            <span className="opacity-40">Dificuldade:</span> {normalizeDifficulty(q.difficulty)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
+                      <Markdown>{q.text}</Markdown>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(q.options || []).map((opt: string, optIdx: number) => {
+                        const isAnswered = answers[q.id] !== undefined;
+                        const isCorrect = optIdx === q.correct_option_index;
+                        const isSelected = answers[q.id] === optIdx;
+                        const isTempSelected = tempAnswers[q.id] === optIdx;
+                        const isCut = (cutOptions[q.id] || []).includes(optIdx);
+                        return (
+                          <button key={optIdx}
+                            onClick={() => !isCut && handleAnswer(q, optIdx)}
+                            disabled={isAnswered || isCut}
+                            className={cn(
+                              "w-full text-left px-5 py-4 rounded-2xl border text-sm transition-all duration-300 flex items-center gap-4 group relative",
+                              isCut ? "opacity-20 line-through cursor-not-allowed border-white/5" :
+                              isAnswered ? (isCorrect ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : isSelected ? "bg-red-500/10 border-red-500/30 text-red-400" : "border-white/5 text-white/50") :
+                              isTempSelected ? "bg-[#3B82F6]/10 border-[#3B82F6]/40 text-[#3B82F6] shadow-[0_0_20px_-5px_#3B82F6]" :
+                              "border-white/5 text-white/80 hover:border-white/20 hover:bg-white/[0.03]"
+                            )}
+                          >
+                            <span className={cn("w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border transition-all",
+                              isCut ? "border-white/10 text-white/20" :
+                              isAnswered ? (isCorrect ? "border-emerald-500 bg-emerald-500 text-white" : isSelected ? "border-red-500 bg-red-500 text-white" : "border-white/10 text-white/30") :
+                              isTempSelected ? "border-[#3B82F6] bg-[#3B82F6] text-white" : "border-white/10 text-white/40"
+                            )}>
+                              {isAnswered ? (isCorrect ? <Check size={14} /> : isSelected ? <XCircle size={14} /> : String.fromCharCode(65 + optIdx)) : String.fromCharCode(65 + optIdx)}
+                            </span>
+                            <span className="flex-1">{opt}</span>
+                            {!isAnswered && !isCut && (
+                              <button onClick={(e) => { e.stopPropagation(); toggleCut(q.id, optIdx); }}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-white/20 hover:text-red-400 transition-all" title="Eliminar alternativa">
+                                <Scissors size={14} />
+                              </button>
+                            )}
+                          </button>
+                        );
+                      })}
+
+                      {!answers[q.id] && tempAnswers[q.id] !== undefined && (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-4">
+                          <button onClick={() => confirmAnswer(q)}
+                            className="bg-blue-500 hover:bg-blue-400 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-xs transition-all shadow-lg shadow-blue-500/20 active:scale-95">
+                            Responder
+                          </button>
+                        </motion.div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 border-t border-white/5 pt-4 flex-wrap">
+                      <button onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'gabarito' ? undefined : 'gabarito' }))}
+                        className={cn("flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          activeTab[q.id] === 'gabarito' ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "text-white/70 hover:text-white/100 hover:bg-white/5")}>
+                        <BookOpen size={14} /> Gabarito
+                      </button>
+                      {getVideoStatus(q) === 'Sim' && (
+                        <button onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'video' ? undefined : 'video' }))}
+                          className={cn("flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                            activeTab[q.id] === 'video' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "text-white/70 hover:text-white/100 hover:bg-white/5")}>
+                          <Play size={14} /> Resolução em Vídeo
+                        </button>
+                      )}
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                      {activeTab[q.id] === 'gabarito' && (
+                        <motion.div key="gabarito" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -10, height: 0 }} className="overflow-hidden">
+                          <div className="bg-[#3B82F6]/5 border border-[#3B82F6]/10 rounded-2xl p-6 mt-2">
+                            <div className="flex items-center gap-2 text-[#3B82F6] font-bold text-xs uppercase tracking-widest mb-4"><HelpCircle size={14} /> Análise Técnica</div>
+                            <div className="text-sm text-white/70 leading-relaxed markdown-body"><Markdown>{q.explanation || "Explicação em breve."}</Markdown></div>
+                          </div>
+                        </motion.div>
+                      )}
+                      {activeTab[q.id] === 'video' && getVideoStatus(q) === 'Sim' && (
+                        <motion.div key="video" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -10, height: 0 }} className="overflow-hidden">
+                          <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-6 mt-2">
+                            <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-4"><Play size={14} /> Resolução em Vídeo</div>
+                            <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
+                              <iframe width="100%" height="100%" src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} title="Resolução em Vídeo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+
+              {notebookTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-8">
+                  <button onClick={() => { setCurrentPage(prev => Math.max(1, prev - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    disabled={currentPage === 1} className="p-3 bg-white/5 border border-white/10 rounded-2xl text-white disabled:opacity-20 transition-all hover:bg-white/10">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <div className="flex gap-2">
+                    {Array.from({ length: notebookTotalPages }, (_, i) => i + 1).map(pageNum => (
+                      <button key={pageNum} onClick={() => { setCurrentPage(pageNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className={cn("w-10 h-10 rounded-xl border font-black text-sm transition-all",
+                          currentPage === pageNum ? "bg-[#3B82F6] border-[#3B82F6] text-white" : "bg-white/5 border-white/10 text-white/40 hover:text-white hover:bg-white/10")}>
+                        {pageNum}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => { setCurrentPage(prev => Math.min(notebookTotalPages, prev + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    disabled={currentPage === notebookTotalPages} className="p-3 bg-white/5 border border-white/10 rounded-2xl text-white disabled:opacity-20 transition-all hover:bg-white/10">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-white/20 uppercase tracking-[0.2em] font-black text-[10px] bg-white/[0.01] rounded-3xl border border-white/5 border-dashed">
+              Este caderno não possui questões
+            </div>
+          )}
+        </div>
       )}
 
       {activeTopTab === 'saved_filters' && (
-        <SavedFiltersView />
+        <SavedFiltersView onLoadFilter={loadSavedFilter} />
       )}
 
       {/* Admin Modal */}
@@ -1508,10 +1863,11 @@ export default function Questions() {
 }
 
 // Sub-components for Notebooks and Saved Filters
-function NotebooksView() {
+function NotebooksView({ onOpenNotebook }: { onOpenNotebook: (id: string) => void }) {
   const { notebooks, addNotebook, deleteNotebook, updateNotebook } = useStudy();
   const [search, setSearch] = useState('');
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [movingNotebookId, setMovingNotebookId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentFolderId && !notebooks.find(n => n.id === currentFolderId)) {
@@ -1524,14 +1880,54 @@ function NotebooksView() {
     return parentMatch && nb.title.toLowerCase().includes(search.toLowerCase());
   });
 
+  const folders = notebooks.filter(nb => nb.type === 'folder');
   const currentFolder = notebooks.find(n => n.id === currentFolderId);
+
+  const handleMove = (notebookId: string, targetFolderId: string | null) => {
+    updateNotebook(notebookId, { parentId: targetFolderId });
+    setMovingNotebookId(null);
+  };
 
   return (
     <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Move modal */}
+      {movingNotebookId && (
+        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4" onClick={() => setMovingNotebookId(null)}>
+          <div className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                <FolderInput size={16} className="text-blue-400" />
+                Mover para Pasta
+              </h3>
+              <button onClick={() => setMovingNotebookId(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              <button
+                onClick={() => handleMove(movingNotebookId, null)}
+                className="w-full text-left px-4 py-3 rounded-xl text-sm text-white/70 hover:bg-white/5 transition-all flex items-center gap-3 border border-white/5"
+              >
+                <ChevronLeft size={16} /> Raiz (sem pasta)
+              </button>
+              {folders.filter(f => f.id !== movingNotebookId).map(f => (
+                <button key={f.id}
+                  onClick={() => handleMove(movingNotebookId, f.id)}
+                  className="w-full text-left px-4 py-3 rounded-xl text-sm text-white/70 hover:bg-blue-500/10 hover:text-blue-400 transition-all flex items-center gap-3 border border-white/5"
+                >
+                  <Folder size={16} className="text-blue-500" /> {f.title}
+                </button>
+              ))}
+              {folders.length === 0 && (
+                <p className="text-white/30 text-xs text-center py-4 uppercase tracking-widest">Nenhuma pasta criada</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4 flex-1 min-w-[200px]">
           {currentFolderId && (
-            <button 
+            <button
               onClick={() => setCurrentFolderId(currentFolder?.parentId || null)}
               className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all flex items-center gap-2"
               title="Voltar"
@@ -1542,7 +1938,7 @@ function NotebooksView() {
           )}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-            <input 
+            <input
               type="text"
               placeholder="Procure por um caderno"
               value={search}
@@ -1552,7 +1948,7 @@ function NotebooksView() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={() => {
               const title = prompt('Nome da Pasta:');
               if (title) addNotebook({ title, type: 'folder', parentId: currentFolderId });
@@ -1576,14 +1972,15 @@ function NotebooksView() {
              </span>
           )}
         </div>
-        
+
         <div className="space-y-3">
           {filteredNotebooks.length > 0 ? filteredNotebooks.map((nb) => (
-            <div 
-              key={nb.id} 
+            <div
+              key={nb.id}
               className="group bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:border-[#0055FF]/30 transition-all cursor-pointer"
               onClick={() => {
                 if (nb.type === 'folder') setCurrentFolderId(nb.id);
+                else onOpenNotebook(nb.id);
               }}
             >
               <div className="flex items-center gap-4">
@@ -1603,7 +2000,15 @@ function NotebooksView() {
                 </div>
               </div>
               <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <button 
+                {nb.type === 'notebook' && (
+                  <button
+                    onClick={() => setMovingNotebookId(nb.id)}
+                    className="p-2 text-white/20 hover:text-blue-400 transition-colors" title="Mover para pasta"
+                  >
+                    <FolderInput size={18} />
+                  </button>
+                )}
+                <button
                   onClick={() => {
                     const newTitle = prompt('Novo nome:', nb.title);
                     if (newTitle) updateNotebook(nb.id, { title: newTitle });
@@ -1612,7 +2017,7 @@ function NotebooksView() {
                 >
                   <Settings2 size={18} />
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     if (confirm('Deseja excluir este item?')) deleteNotebook(nb.id);
                   }}
@@ -1632,7 +2037,7 @@ function NotebooksView() {
     </div>
   );
 }
-function SavedFiltersView() {
+function SavedFiltersView({ onLoadFilter }: { onLoadFilter: (filters: any) => void }) {
   const { savedFilters, deleteSavedFilter } = useStudy();
   const [search, setSearch] = useState('');
 
@@ -1643,7 +2048,7 @@ function SavedFiltersView() {
       <div className="flex items-center justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-          <input 
+          <input
             type="text"
             placeholder="Procure por um filtro"
             value={search}
@@ -1672,7 +2077,13 @@ function SavedFiltersView() {
                     <td className="py-6 text-white/40 text-sm">{new Date(f.createdAt).toLocaleDateString()}</td>
                     <td className="py-6 pr-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button 
+                        <button
+                          onClick={() => onLoadFilter(f.filters)}
+                          className="px-4 py-2 bg-blue-500/10 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all"
+                        >
+                          Carregar
+                        </button>
+                        <button
                           onClick={() => {
                             if (confirm('Deseja excluir este filtro?')) deleteSavedFilter(f.id);
                           }}
