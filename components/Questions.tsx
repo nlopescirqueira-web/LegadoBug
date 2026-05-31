@@ -811,7 +811,7 @@ export default function Questions() {
 
               {questions.length > 0 ? (
                 <>
-                  <div className="space-y-4 relative z-10">
+                  <div className="space-y-4 relative z-30">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-4">
                       {/* Row 1 */}
                       <div className="md:col-span-3 relative">
