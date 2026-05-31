@@ -423,7 +423,7 @@ export default function Questions() {
         advFilters.assunto.some(a => normalizeString(a) === normalizeString(q.topic));
       
       const matchAno = advFilters.ano.length === 0 ||
-        advFilters.ano.some(a => normalizeString(a) === normalizeString(q.year));
+        advFilters.ano.some(a => normalizeString(a) === normalizeString(String(q.year ?? '')));
 
       const matchBanca = advFilters.banca.length === 0 ||
         advFilters.banca.some(b => normalizeString(b) === normalizeString(q.institution));
@@ -438,8 +438,9 @@ export default function Questions() {
       const matchDificuldade = advFilters.dificuldade.length === 0 ||
         advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)));
 
-      const matchVideo = advFilters.videoRes === undefined || advFilters.videoRes.length === 0 ||
-        advFilters.videoRes.some(v => normalizeString(v) === normalizeString(getVideoStatus(q)));
+      const qVideoStatus = getVideoStatus(q);
+      const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 ||
+        advFilters.videoRes.some(v => normalizeString(v) === normalizeString(qVideoStatus));
 
       const userAnswers = questionAnswers.filter(a => a.questionId === q.id);
       const hasAnswered = userAnswers.length > 0;
@@ -462,39 +463,6 @@ export default function Questions() {
       return matchSearch && matchDisciplina && matchAssunto && matchAno && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
     });
   }, [questions, advFilters, searchTerm, questionAnswers]);
-
-  const questionsForYearCount = useMemo(() => {
-    return questions.filter(q => {
-      const matchSearch = !searchTerm ||
-        q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.topic && q.topic.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchDisciplina = advFilters.disciplina.length === 0 ||
-        advFilters.disciplina.some((d: string) => normalizeString(normalizeSubject(d)) === normalizeString(normalizeSubject(q.subject)));
-
-      const matchAssunto = advFilters.assunto.length === 0 ||
-        advFilters.assunto.some((a: string) => normalizeString(a) === normalizeString(q.topic));
-
-      const matchBanca = advFilters.banca.length === 0 ||
-        advFilters.banca.some((b: string) => normalizeString(b) === normalizeString(q.institution));
-
-      const matchInstituicao = advFilters.instituicao.length === 0 ||
-        advFilters.instituicao.some((i: string) => {
-          const org = q.org || '';
-          const normalizedOrg = org.toLowerCase().includes('polícia militar do estado de são paulo') ? 'PMSP' : org;
-          return normalizeString(i) === normalizeString(normalizedOrg);
-        });
-
-      const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        advFilters.dificuldade.some((d: string) => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)));
-
-      const matchVideo = advFilters.videoRes === undefined || advFilters.videoRes.length === 0 ||
-        advFilters.videoRes.some((v: string) => normalizeString(v) === normalizeString(getVideoStatus(q)));
-
-      return matchSearch && matchDisciplina && matchAssunto && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
-    });
-  }, [questions, advFilters.disciplina, advFilters.assunto, advFilters.banca, advFilters.instituicao, advFilters.dificuldade, advFilters.videoRes, searchTerm]);
 
   const filtersActive = useMemo(() => {
     return searchTerm !== '' || 
@@ -571,13 +539,9 @@ export default function Questions() {
       ...questions.map(q => normalizeSubject(q.subject))
     ]);
 
-    const ano = Array.from(new Set(questions.map(q => {
-      const y = q.year;
-      if (y === null || y === undefined) return '';
-      return String(y).trim();
-    })))
-      .filter(val => val && val !== 'null' && val !== 'undefined' && val !== '')
-      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    const ano = getUniqueCaseInsensitive(
+      questions.map(q => q.year != null ? String(q.year) : null)
+    ).sort((a, b) => Number(b) - Number(a));
     
     const banca = getUniqueCaseInsensitive(questions.map(q => q.institution)).map(s => s.trim());
 
@@ -833,29 +797,27 @@ export default function Questions() {
                         onChange={(val) => setAdvFilters(prev => ({ ...prev, instituicao: val }))} 
                         options={uniqueValues.instituicao}
                       />
-                      <FilterDropdown 
-                        label="Dificuldade" 
-                        options={uniqueValues.dificuldade} 
-                        selected={advFilters.dificuldade} 
-                        onChange={(val) => setAdvFilters(prev => ({ ...prev, dificuldade: val }))} 
+                      <FilterDropdown
+                        label="Dificuldade"
+                        options={uniqueValues.dificuldade}
+                        selected={advFilters.dificuldade}
+                        onChange={(val) => { setAdvFilters(prev => ({ ...prev, dificuldade: val })); setCurrentPage(1); }}
                       />
                       <FilterDropdown
                         label="Ano"
                         options={uniqueValues.ano}
                         selected={advFilters.ano}
-                        onChange={(val) => setAdvFilters(prev => ({ ...prev, ano: val }))}
-                        showCounts={true}
-                        questions={questionsForYearCount}
+                        onChange={(val) => { setAdvFilters(prev => ({ ...prev, ano: val })); setCurrentPage(1); }}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       {/* Row 3 */}
-                      <FilterDropdown 
-                        label="Resolução Por Vídeo" 
-                        options={uniqueValues.videoRes} 
-                        selected={advFilters.videoRes || []} 
-                        onChange={(val) => setAdvFilters(prev => ({ ...prev, videoRes: val }))} 
+                      <FilterDropdown
+                        label="Resolução Por Vídeo"
+                        options={uniqueValues.videoRes}
+                        selected={advFilters.videoRes || []}
+                        onChange={(val) => { setAdvFilters(prev => ({ ...prev, videoRes: val })); setCurrentPage(1); }}
                       />
                     </div>
                   </div>
