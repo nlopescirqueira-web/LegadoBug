@@ -19,7 +19,8 @@ import {
   Star,
   Medal,
   Crown,
-  Zap
+  Zap,
+  Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -61,6 +62,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'ranking', label: 'Ranking', icon: Trophy },
     { id: 'questoes', label: 'Questões', icon: BookOpen },
     { id: 'flashcards', label: 'Flashcards', icon: Layers },
+    { id: 'simulados', label: 'Simulados', icon: Target },
     { id: 'desempenho', label: 'Desempenho', icon: TrendingUp },
     { id: 'cronograma', label: 'Cronograma', icon: Calendar },
     { id: 'tutorial', label: 'Tutorial', icon: PlayCircle },
