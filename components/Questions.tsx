@@ -427,20 +427,42 @@ export default function Questions() {
   }, []);
 
   const filteredQuestions = useMemo(() => {
-    return questions.filter(q => {
-      const matchSearch = !searchTerm || 
+    const hasAnyFilter = advFilters.ano.length > 0 || advFilters.dificuldade.length > 0 ||
+      advFilters.disciplina.length > 0 || advFilters.banca.length > 0 ||
+      advFilters.instituicao.length > 0 || (advFilters.videoRes && advFilters.videoRes.length > 0);
+
+    if (hasAnyFilter) {
+      console.log('%c[FILTRO EXECUTANDO]', 'color: #F59E0B; font-weight: bold; font-size: 14px;');
+      console.log('Estado dos filtros:', JSON.stringify({
+        ano: advFilters.ano,
+        dificuldade: advFilters.dificuldade,
+        disciplina: advFilters.disciplina,
+        banca: advFilters.banca,
+        videoRes: advFilters.videoRes,
+        exclude: advFilters.exclude
+      }, null, 2));
+    }
+
+    let debugCount = 0;
+    const result = questions.filter(q => {
+      const matchSearch = !searchTerm ||
         q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (q.topic && q.topic.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchDisciplina = advFilters.disciplina.length === 0 || 
+      const matchDisciplina = advFilters.disciplina.length === 0 ||
         advFilters.disciplina.some(d => normalizeString(normalizeSubject(d)) === normalizeString(normalizeSubject(q.subject)));
-      
-      const matchAssunto = advFilters.assunto.length === 0 || 
+
+      const matchAssunto = advFilters.assunto.length === 0 ||
         advFilters.assunto.some(a => normalizeString(a) === normalizeString(q.topic));
-      
+
+      const qYearStr = q.year != null ? String(q.year) : '';
       const matchAno = advFilters.ano.length === 0 ||
-        advFilters.ano.some(a => normalizeString(a) === normalizeString(String(q.year ?? '')));
+        advFilters.ano.some(a => {
+          const filterVal = normalizeString(a);
+          const questionVal = normalizeString(qYearStr);
+          return filterVal === questionVal || a === qYearStr || Number(a) === q.year;
+        });
 
       const matchBanca = advFilters.banca.length === 0 ||
         advFilters.banca.some(b => normalizeString(b) === normalizeString(q.institution));
@@ -452,8 +474,13 @@ export default function Questions() {
           return normalizeString(i) === normalizeString(normalizedOrg);
         });
 
+      const qDiffNorm = normalizeDifficulty(q.difficulty);
       const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)));
+        advFilters.dificuldade.some(d => {
+          const filterVal = normalizeString(d);
+          const questionVal = normalizeString(qDiffNorm);
+          return filterVal === questionVal;
+        });
 
       const qVideoStatus = getVideoStatus(q);
       const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 ||
@@ -463,7 +490,7 @@ export default function Questions() {
       const hasAnswered = userAnswers.length > 0;
       const wasCorrect = userAnswers.some(a => a.isCorrect);
       const wasIncorrect = hasAnswered && !wasCorrect;
-      
+
       const lastAnswer = userAnswers.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
       const answeredRecently = (days: number) => {
         if (!lastAnswer) return false;
@@ -476,9 +503,35 @@ export default function Questions() {
       if (advFilters.exclude.correct && wasCorrect) return false;
       if (advFilters.exclude.lastWeek && answeredRecently(7)) return false;
       if (advFilters.exclude.lastMonth && answeredRecently(30)) return false;
-      
-      return matchSearch && matchDisciplina && matchAssunto && matchAno && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
+
+      const passes = matchSearch && matchDisciplina && matchAssunto && matchAno && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
+
+      if (hasAnyFilter && !passes && debugCount < 3) {
+        debugCount++;
+        console.log(`%c[QUESTÃO REJEITADA #${debugCount}]`, 'color: #EF4444; font-weight: bold;', {
+          id: q.id,
+          year: q.year,
+          yearType: typeof q.year,
+          difficulty: q.difficulty,
+          difficultyNormalized: qDiffNorm,
+          subject: q.subject,
+          matchSearch, matchDisciplina, matchAssunto, matchAno, matchBanca, matchInstituicao, matchDificuldade, matchVideo,
+          filterAno: advFilters.ano,
+          filterDificuldade: advFilters.dificuldade,
+          comparacaoAno: advFilters.ano.length > 0 ? `"${normalizeString(advFilters.ano[0])}" vs "${normalizeString(qYearStr)}"` : 'N/A',
+          comparacaoDificuldade: advFilters.dificuldade.length > 0 ? `"${normalizeString(advFilters.dificuldade[0])}" vs "${normalizeString(qDiffNorm)}"` : 'N/A'
+        });
+      }
+
+      return passes;
     });
+
+    if (hasAnyFilter) {
+      console.log(`%c[RESULTADO] ${result.length} questões passaram no filtro de ${questions.length} total`,
+        result.length > 0 ? 'color: #10B981; font-weight: bold; font-size: 14px;' : 'color: #EF4444; font-weight: bold; font-size: 14px;');
+    }
+
+    return result;
   }, [questions, advFilters, searchTerm, questionAnswers]);
 
   const filtersActive = useMemo(() => {
