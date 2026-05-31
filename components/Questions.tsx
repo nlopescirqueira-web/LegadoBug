@@ -384,6 +384,23 @@ export default function Questions() {
     fetchQuestions();
   }, [fetchQuestions]);
 
+  useEffect(() => {
+    if (questions.length > 0) {
+      const years = [...new Set(questions.map(q => q.year).filter(y => y != null))].sort();
+      const difficulties = [...new Set(questions.map(q => q.difficulty).filter(Boolean))];
+      const videos = questions.filter(q => {
+        const url = String(q.video_url || q.videoUrl || '').trim();
+        return url !== '' && url !== 'null' && url !== 'undefined';
+      });
+      console.log('%c[DIAGNÓSTICO FILTROS]', 'color: #3B82F6; font-weight: bold; font-size: 14px;');
+      console.log('Total de questões:', questions.length);
+      console.log('Anos no banco:', years);
+      console.log('Dificuldades no banco:', difficulties);
+      console.log('Questões com vídeo:', videos.length);
+      console.log('Exemplo de questão:', JSON.stringify(questions[0], null, 2));
+    }
+  }, [questions]);
+
   const toggleFilter = useCallback((key: keyof AdvancedFilters, value: string) => {
     setAdvFilters(prev => {
       const list = prev[key];
