@@ -121,10 +121,7 @@ function FilterDropdown({
   const getCount = (opt: string) => {
     if (!showCounts || !questions.length) return null;
     if (label === 'Ano') {
-      return questions.filter(q => {
-        const qYear = q.year === null || q.year === undefined ? '' : String(q.year).trim();
-        return qYear !== '' && opt.trim() === qYear;
-      }).length;
+      return questions.filter(q => normalizeString(q.year) === normalizeString(opt)).length;
     }
     return null;
   };
@@ -243,12 +240,12 @@ const normalizeSubject = (s: string | null | undefined): string => {
   if (!s) return '';
   const val = s.trim();
   const low = val.toLowerCase();
-  
+
   // Português normalization
   if (
-    low === 'português' || 
-    low === 'portugues' || 
-    low === 'língua portuguesa' || 
+    low === 'português' ||
+    low === 'portugues' ||
+    low === 'língua portuguesa' ||
     low === 'lingua portuguesa' ||
     low.includes('língua portuguesa') ||
     low.includes('lingua portuguesa') ||
@@ -270,8 +267,23 @@ const normalizeSubject = (s: string | null | undefined): string => {
   if (low.includes('matemática') || low === 'matematica') {
     return 'Matemática';
   }
-  
+
   return val;
+};
+
+const normalizeDifficulty = (s: string | null | undefined): string => {
+  if (!s) return '';
+  const norm = normalizeString(s);
+  if (norm === 'facil' || norm === 'easy') return 'Fácil';
+  if (norm === 'medio' || norm === 'media' || norm === 'normal' || norm === 'moderate' || norm === 'moderado' || norm === 'moderada') return 'Médio';
+  if (norm === 'dificil' || norm === 'hard' || norm === 'dificílimo' || norm === 'muito dificil') return 'Difícil';
+  return s.trim();
+};
+
+const getVideoStatus = (q: any): string => {
+  const url = String(q.video_url || q.videoUrl || '').trim();
+  if (url === '' || url === 'null' || url === 'undefined') return 'Não';
+  return 'Sim';
 };
 
 export default function Questions() {
@@ -411,32 +423,23 @@ export default function Questions() {
         advFilters.assunto.some(a => normalizeString(a) === normalizeString(q.topic));
       
       const matchAno = advFilters.ano.length === 0 ||
-        advFilters.ano.some(yearStr => {
-          const qYear = q.year === null || q.year === undefined ? '' : String(q.year).trim();
-          return qYear !== '' && yearStr.trim() === qYear;
-        });
-      
-      const matchBanca = advFilters.banca.length === 0 || 
+        advFilters.ano.some(a => normalizeString(a) === normalizeString(q.year));
+
+      const matchBanca = advFilters.banca.length === 0 ||
         advFilters.banca.some(b => normalizeString(b) === normalizeString(q.institution));
-      
-      const matchInstituicao = advFilters.instituicao.length === 0 || 
+
+      const matchInstituicao = advFilters.instituicao.length === 0 ||
         advFilters.instituicao.some(i => {
           const org = q.org || '';
           const normalizedOrg = org.toLowerCase().includes('polícia militar do estado de são paulo') ? 'PMSP' : org;
           return normalizeString(i) === normalizeString(normalizedOrg);
         });
-      
-      const qDifficulty = normalizeString(q.difficulty);
-      const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        qDifficulty === '' ||
-        advFilters.dificuldade.some(d => normalizeString(d) === qDifficulty);
 
-      const videoUrl = String(q.video_url || q.videoUrl || '').trim();
-      const hasVideo = videoUrl !== '' && videoUrl !== 'null' && videoUrl !== 'undefined';
-      const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 || (
-        (advFilters.videoRes.some(v => normalizeString(v) === 'sim') && hasVideo) ||
-        (advFilters.videoRes.some(v => normalizeString(v) === 'nao') && !hasVideo)
-      );
+      const matchDificuldade = advFilters.dificuldade.length === 0 ||
+        advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)));
+
+      const matchVideo = advFilters.videoRes === undefined || advFilters.videoRes.length === 0 ||
+        advFilters.videoRes.some(v => normalizeString(v) === normalizeString(getVideoStatus(q)));
 
       const userAnswers = questionAnswers.filter(a => a.questionId === q.id);
       const hasAnswered = userAnswers.length > 0;
@@ -483,17 +486,11 @@ export default function Questions() {
           return normalizeString(i) === normalizeString(normalizedOrg);
         });
 
-      const qDifficulty = normalizeString(q.difficulty);
       const matchDificuldade = advFilters.dificuldade.length === 0 ||
-        qDifficulty === '' ||
-        advFilters.dificuldade.some((d: string) => normalizeString(d) === qDifficulty);
+        advFilters.dificuldade.some((d: string) => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)));
 
-      const videoUrl = String(q.video_url || q.videoUrl || '').trim();
-      const hasVideo = videoUrl !== '' && videoUrl !== 'null' && videoUrl !== 'undefined';
-      const matchVideo = !advFilters.videoRes || advFilters.videoRes.length === 0 || (
-        (advFilters.videoRes.some((v: string) => normalizeString(v) === 'sim') && hasVideo) ||
-        (advFilters.videoRes.some((v: string) => normalizeString(v) === 'nao') && !hasVideo)
-      );
+      const matchVideo = advFilters.videoRes === undefined || advFilters.videoRes.length === 0 ||
+        advFilters.videoRes.some((v: string) => normalizeString(v) === normalizeString(getVideoStatus(q)));
 
       return matchSearch && matchDisciplina && matchAssunto && matchBanca && matchInstituicao && matchDificuldade && matchVideo;
     });
@@ -593,11 +590,7 @@ export default function Questions() {
       })
     ]);
     
-    const standardDifficulties = ['Fácil', 'Médio', 'Difícil'];
-    const extraDifficulties = getUniqueCaseInsensitive(
-      questions.map(q => q.difficulty)
-    ).filter(d => !standardDifficulties.some(s => normalizeString(s) === normalizeString(d)));
-    const dificuldade = [...standardDifficulties, ...extraDifficulties];
+    const dificuldade = ['Fácil', 'Médio', 'Difícil'];
     const videoRes = ['Sim', 'Não'];
     
     const relevantForAssunto = advFilters.disciplina.length === 0 
@@ -1127,18 +1120,18 @@ export default function Questions() {
                       )}
 
                       {/* Dificuldade */}
-                      {q.difficulty && (
+                      {q.difficulty && normalizeDifficulty(q.difficulty) && (
                       <button
-                        onClick={() => toggleFilter('dificuldade', q.difficulty)}
+                        onClick={() => toggleFilter('dificuldade', normalizeDifficulty(q.difficulty))}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap",
-                          advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty))
+                          advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty)))
                             ? "bg-[#3B82F6] text-white border-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                             : "bg-white/[0.05] border-white/10 text-white/90 hover:bg-white/10 hover:border-white/20"
                         )}
                       >
-                        <BrainCircuit size={11} className={advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(q.difficulty)) ? "text-white" : "text-[#3B82F6]/50"} />
-                        <span className="opacity-40">Dificuldade:</span> {q.difficulty}
+                        <BrainCircuit size={11} className={advFilters.dificuldade.some(d => normalizeString(d) === normalizeString(normalizeDifficulty(q.difficulty))) ? "text-white" : "text-[#3B82F6]/50"} />
+                        <span className="opacity-40">Dificuldade:</span> {normalizeDifficulty(q.difficulty)}
                       </button>
                       )}
                     </div>
@@ -1336,7 +1329,7 @@ export default function Questions() {
                               </Markdown>
                             </div>
                             
-                            {q.video_url && String(q.video_url).trim() !== '' && String(q.video_url).trim() !== 'null' && (
+                            {getVideoStatus(q) === 'Sim' && (
                               <div className='mt-4 w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black'>
                                 <iframe width='100%' height='100%' src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} title='Resolução em Vídeo' frameBorder='0' allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture' allowFullScreen></iframe>
                               </div>
