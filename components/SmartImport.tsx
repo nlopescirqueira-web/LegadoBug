@@ -6,7 +6,7 @@ import { Loader2, Sparkles, Check, AlertCircle, Save, FileText, Image as ImageIc
 import { analyzeQuestionsClient } from '@/lib/gemini';
 import { cn } from '@/lib/utils';
 
-export default function SmartImport({ onComplete }: { onComplete: () => void }) {
+export default function SmartImport({ onComplete, onQuestionsImported }: { onComplete: () => void; onQuestionsImported?: (ids: string[]) => void }) {
   const [rawText, setRawText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [isParsing, setIsParsing] = useState(false);
@@ -212,21 +212,25 @@ export default function SmartImport({ onComplete }: { onComplete: () => void }) 
 
       console.log('Questions to insert:', questionsToInsert);
 
-      const { error: insertError } = await supabase
+      const { data: insertedData, error: insertError } = await supabase
         .from('questions')
-        .insert(questionsToInsert);
+        .insert(questionsToInsert)
+        .select('id, subject');
 
       if (insertError) {
         console.error('Supabase Insert Error:', insertError);
         throw insertError;
       }
-      
+
       setSuccess(`${questionsToInsert.length} questões importadas com sucesso para ${batchOrg || 'PRF'} (${batchYear || 'Atual'})!`);
       setParsedQuestions([]);
       setRawText('');
       setFiles([]);
-      
-      // Delay completion to show success message
+
+      if (onQuestionsImported && insertedData) {
+        onQuestionsImported(insertedData.map((q: any) => q.id));
+      }
+
       setTimeout(() => {
         onComplete();
       }, 2000);
@@ -550,7 +554,7 @@ export default function SmartImport({ onComplete }: { onComplete: () => void }) 
                 {q.has_image && (
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-[#3B82F6]/60 uppercase tracking-widest">URL da Imagem (Necessário para questões com imagem)</label>
-                    <input 
+                    <input
                       type="text"
                       placeholder="Cole o link da imagem aqui..."
                       value={q.image_url}
@@ -559,6 +563,29 @@ export default function SmartImport({ onComplete }: { onComplete: () => void }) 
                     />
                   </div>
                 )}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-emerald-500/60 uppercase tracking-widest">Resolução em Vídeo (YouTube - Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="Cole o link do YouTube aqui..."
+                    value={q.video_url || ''}
+                    onChange={(e) => updateQuestionDetailed(idx, 'video_url', e.target.value)}
+                    className="w-full bg-black/40 border border-emerald-500/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                  {q.video_url && (
+                    <div className="rounded-lg overflow-hidden border border-emerald-500/20">
+                      <iframe
+                        width="100%"
+                        height="180"
+                        src={`https://www.youtube.com/embed/${q.video_url.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1] || ''}`}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="block"
+                      />
+                    </div>
+                  )}
+                </div>
 
                 <div className="text-[10px] text-white/60 italic">
                   {q.option_a} | {q.option_b} | {q.option_c} ...

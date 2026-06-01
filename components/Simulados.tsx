@@ -753,9 +753,10 @@ export default function Simulados() {
                     placeholder="Buscar por texto, matéria ou assunto..."
                     className="flex-1 bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-[#3B82F6] transition-colors" />
                   <select value={pickerSubject} onChange={e => setPickerSubject(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm text-white focus:outline-none">
-                    <option value="">Todas as matérias</option>
-                    {uniqueSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                    className="bg-[#1a1a1a] border border-white/10 rounded-xl py-2 px-4 text-sm text-white focus:outline-none appearance-none"
+                    style={{ colorScheme: 'dark' }}>
+                    <option value="" className="bg-[#1a1a1a] text-white">Todas as matérias</option>
+                    {uniqueSubjects.map(s => <option key={s} value={s} className="bg-[#1a1a1a] text-white">{s}</option>)}
                   </select>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -796,10 +797,21 @@ export default function Simulados() {
                   <button onClick={() => setShowSmartImport(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
                 </div>
                 <div className="p-4">
-                  <SmartImport onComplete={() => {
-                    setShowSmartImport(false);
-                    fetchAllQuestions().then(() => {});
-                  }} />
+                  <SmartImport
+                    onComplete={() => {
+                      setShowSmartImport(false);
+                      fetchAllQuestions();
+                    }}
+                    onQuestionsImported={async (ids) => {
+                      const { data } = await supabase.from('questions').select('*').in('id', ids);
+                      if (data) {
+                        setEditQuestions(prev => [
+                          ...prev,
+                          ...data.map(q => ({ question: q, subject_group: q.subject || 'Geral' }))
+                        ]);
+                      }
+                    }}
+                  />
                 </div>
               </motion.div>
             </motion.div>
