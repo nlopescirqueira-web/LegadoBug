@@ -565,15 +565,15 @@ export default function SmartImport({ onComplete, onQuestionsImported }: { onCom
                 )}
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-emerald-500/60 uppercase tracking-widest">Resolução em Vídeo (YouTube - Opcional)</label>
+                  <label className="text-[10px] font-bold text-emerald-500/60 uppercase tracking-widest">Resolução em Vídeo (YouTube ou Telegram)</label>
                   <input
                     type="text"
-                    placeholder="Cole o link do YouTube aqui..."
+                    placeholder="Cole o link do YouTube ou Telegram aqui..."
                     value={q.video_url || ''}
                     onChange={(e) => updateQuestionDetailed(idx, 'video_url', e.target.value)}
                     className="w-full bg-black/40 border border-emerald-500/20 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
                   />
-                  {q.video_url && (
+                  {q.video_url && (q.video_url.includes('youtube.com') || q.video_url.includes('youtu.be')) && (
                     <div className="rounded-lg overflow-hidden border border-emerald-500/20">
                       <iframe
                         width="100%"
@@ -583,6 +583,11 @@ export default function SmartImport({ onComplete, onQuestionsImported }: { onCom
                         allowFullScreen
                         className="block"
                       />
+                    </div>
+                  )}
+                  {q.video_url && !(q.video_url.includes('youtube.com') || q.video_url.includes('youtu.be')) && (
+                    <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-bold bg-emerald-500/10 rounded-lg px-3 py-2 border border-emerald-500/20">
+                      <Check size={12} /> Link externo vinculado — será aberto em nova aba
                     </div>
                   )}
                 </div>

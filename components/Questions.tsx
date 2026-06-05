@@ -37,7 +37,10 @@ import {
   Pencil,
   X,
   FolderInput,
-  Video
+  Video,
+  Link,
+  ExternalLink,
+  Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -291,6 +294,14 @@ const getVideoStatus = (q: any): string => {
   return 'Sim';
 };
 
+const isYouTubeUrl = (url: string): boolean => {
+  return url.includes('youtube.com') || url.includes('youtu.be');
+};
+
+const getYouTubeEmbedUrl = (url: string): string => {
+  return url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/');
+};
+
 export default function Questions() {
   const { user, isAdmin } = useAuth();
   const { 
@@ -327,7 +338,7 @@ export default function Questions() {
     }
   });
 
-  const [activeTopTab, setActiveTopTab] = useState<'filter' | 'notebooks' | 'saved_filters'>('filter');
+  const [activeTopTab, setActiveTopTab] = useState<'filter' | 'notebooks' | 'saved_filters' | 'bulk_videos'>('filter');
 
   // Notebook solving mode
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
@@ -795,6 +806,20 @@ export default function Questions() {
           Filtros salvos
           {activeTopTab === 'saved_filters' && <motion.div layoutId="tab-active" className="absolute bottom-0 left-6 right-6 h-1 bg-[#3B82F6] rounded-t-full shadow-[0_0_15px_#3B82F6]" />}
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTopTab('bulk_videos')}
+            className={cn(
+              "px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] transition-all relative shrink-0",
+              activeTopTab === 'bulk_videos'
+                ? "text-white bg-white/[0.03] rounded-t-3xl border-t border-x border-white/10"
+                : "text-white/20 hover:text-white/40"
+            )}
+          >
+            Vídeos em Massa
+            {activeTopTab === 'bulk_videos' && <motion.div layoutId="tab-active" className="absolute bottom-0 left-6 right-6 h-1 bg-[#3B82F6] rounded-t-full shadow-[0_0_15px_#3B82F6]" />}
+          </button>
+        )}
       </div>
 
       {activeTopTab === 'filter' && (
@@ -1531,15 +1556,23 @@ export default function Questions() {
                             <Play size={14} />
                             Resolução em Vídeo
                           </div>
+                          {isYouTubeUrl(q.video_url) ? (
                           <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
                             <iframe
                               width="100%" height="100%"
-                              src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                              src={getYouTubeEmbedUrl(q.video_url)}
                               title="Resolução em Vídeo" frameBorder="0"
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                               allowFullScreen
                             />
                           </div>
+                          ) : (
+                          <a href={q.video_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-3 w-full py-8 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 hover:bg-emerald-500/20 transition-all group">
+                            <ExternalLink size={24} className="group-hover:scale-110 transition-transform" />
+                            <span className="text-sm font-black uppercase tracking-widest">Abrir Resolução em Vídeo</span>
+                          </a>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -1802,9 +1835,17 @@ export default function Questions() {
                         <motion.div key="video" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -10, height: 0 }} className="overflow-hidden">
                           <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-6 mt-2">
                             <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-4"><Play size={14} /> Resolução em Vídeo</div>
+                            {isYouTubeUrl(q.video_url) ? (
                             <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
-                              <iframe width="100%" height="100%" src={q.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} title="Resolução em Vídeo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                              <iframe width="100%" height="100%" src={getYouTubeEmbedUrl(q.video_url)} title="Resolução em Vídeo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                             </div>
+                            ) : (
+                            <a href={q.video_url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-3 w-full py-8 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 hover:bg-emerald-500/20 transition-all group">
+                              <ExternalLink size={24} className="group-hover:scale-110 transition-transform" />
+                              <span className="text-sm font-black uppercase tracking-widest">Abrir Resolução em Vídeo</span>
+                            </a>
+                            )}
                           </div>
                         </motion.div>
                       )}
@@ -1845,6 +1886,10 @@ export default function Questions() {
 
       {activeTopTab === 'saved_filters' && (
         <SavedFiltersView onLoadFilter={loadSavedFilter} />
+      )}
+
+      {activeTopTab === 'bulk_videos' && isAdmin && (
+        <BulkVideoEditor questions={questions} onUpdate={fetchQuestions} />
       )}
 
       {/* Admin Modal */}
@@ -2105,6 +2150,189 @@ function SavedFiltersView({ onLoadFilter }: { onLoadFilter: (filters: any) => vo
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkVideoEditor({ questions, onUpdate }: { questions: any[]; onUpdate: () => void }) {
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterOrg, setFilterOrg] = useState('');
+  const [filterYear, setFilterYear] = useState('');
+  const [filterNoVideo, setFilterNoVideo] = useState(false);
+  const [bulkLinks, setBulkLinks] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const uniqueSubjects = [...new Set(questions.map(q => q.subject).filter(Boolean))].sort();
+  const uniqueOrgs = [...new Set(questions.map(q => q.org).filter(Boolean))].sort();
+  const uniqueYears = [...new Set(questions.map(q => String(q.year)).filter(y => y && y !== 'null'))].sort((a, b) => Number(b) - Number(a));
+
+  const filtered = useMemo(() => {
+    return questions.filter(q => {
+      if (filterSubject && q.subject !== filterSubject) return false;
+      if (filterOrg && q.org !== filterOrg) return false;
+      if (filterYear && String(q.year) !== filterYear) return false;
+      if (filterNoVideo) {
+        const url = String(q.video_url || '').trim();
+        if (url && url !== 'null' && url !== 'undefined') return false;
+      }
+      return true;
+    });
+  }, [questions, filterSubject, filterOrg, filterYear, filterNoVideo]);
+
+  const handleBulkSave = async () => {
+    const links = bulkLinks.split('\n').map(l => l.trim()).filter(Boolean);
+    if (links.length === 0) { alert('Cole pelo menos um link.'); return; }
+    if (links.length > filtered.length) {
+      alert(`Você colou ${links.length} links, mas há apenas ${filtered.length} questões filtradas. Reduza os links ou ajuste os filtros.`);
+      return;
+    }
+
+    setSaving(true);
+    setResult(null);
+    let updated = 0;
+    let errors = 0;
+
+    for (let i = 0; i < links.length; i++) {
+      const q = filtered[i];
+      const { error } = await supabase
+        .from('questions')
+        .update({ video_url: links[i] })
+        .eq('id', q.id);
+      if (error) { errors++; console.error(error); }
+      else updated++;
+    }
+
+    setSaving(false);
+    setResult(`${updated} questões atualizadas com sucesso.${errors > 0 ? ` ${errors} erros.` : ''}`);
+    setBulkLinks('');
+    onUpdate();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-[#0A0A0A] border border-white/5 p-6 sm:p-10 rounded-[2.5rem] space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <Video size={20} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Editor de Vídeos em Massa</h3>
+            <p className="text-sm text-white/50">Filtre as questões, cole os links (um por linha) e salve tudo de uma vez.</p>
+          </div>
+        </div>
+
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+          <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-2 mb-2">
+            <AlertTriangle size={12} /> Como funciona
+          </p>
+          <p className="text-xs text-emerald-400/80">
+            1. Use os filtros abaixo para selecionar as questões que deseja vincular vídeos<br />
+            2. Cole todos os links de vídeo no campo de texto (um link por linha)<br />
+            3. O link 1 será vinculado à questão 1 da lista, link 2 à questão 2, e assim por diante<br />
+            4. Links do Telegram (t.me/...) funcionam — o app abrirá em nova aba automaticamente
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Disciplina</label>
+            <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:outline-none appearance-none"
+              style={{ colorScheme: 'dark' }}>
+              <option value="" className="bg-[#1a1a1a] text-white">Todas</option>
+              {uniqueSubjects.map(s => <option key={s} value={s} className="bg-[#1a1a1a] text-white">{s}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Órgão</label>
+            <select value={filterOrg} onChange={e => setFilterOrg(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:outline-none appearance-none"
+              style={{ colorScheme: 'dark' }}>
+              <option value="" className="bg-[#1a1a1a] text-white">Todos</option>
+              {uniqueOrgs.map(o => <option key={o} value={o} className="bg-[#1a1a1a] text-white">{o}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Ano</label>
+            <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:outline-none appearance-none"
+              style={{ colorScheme: 'dark' }}>
+              <option value="" className="bg-[#1a1a1a] text-white">Todos</option>
+              {uniqueYears.map(y => <option key={y} value={y} className="bg-[#1a1a1a] text-white">{y}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Filtro extra</label>
+            <button onClick={() => setFilterNoVideo(!filterNoVideo)}
+              className={cn("w-full py-3 px-4 rounded-xl text-sm font-bold border transition-all text-left",
+                filterNoVideo ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/5 text-white/40 border-white/10")}>
+              {filterNoVideo ? 'Apenas sem vídeo' : 'Todas as questões'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-white/40">{filtered.length} questões encontradas</span>
+          {filtered.length > 0 && (
+            <span className="text-white/20">•</span>
+          )}
+          {filtered.filter(q => getVideoStatus(q) === 'Sim').length > 0 && (
+            <span className="text-emerald-400/60">{filtered.filter(q => getVideoStatus(q) === 'Sim').length} já com vídeo</span>
+          )}
+        </div>
+
+        {filtered.length > 0 && (
+          <div className="max-h-[300px] overflow-y-auto space-y-1 bg-white/[0.01] rounded-2xl border border-white/5 p-4">
+            {filtered.slice(0, 100).map((q, idx) => (
+              <div key={q.id} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+                <span className="text-[10px] font-black text-white/30 w-8 text-center shrink-0">{idx + 1}</span>
+                <p className="text-xs text-white/60 line-clamp-1 flex-1">{q.text}</p>
+                {getVideoStatus(q) === 'Sim' ? (
+                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded shrink-0">COM VÍDEO</span>
+                ) : (
+                  <span className="text-[9px] font-bold text-white/20 bg-white/5 px-2 py-0.5 rounded shrink-0">SEM VÍDEO</span>
+                )}
+              </div>
+            ))}
+            {filtered.length > 100 && (
+              <p className="text-center text-white/20 text-[10px] uppercase tracking-widest pt-2">Mostrando 100 de {filtered.length}</p>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">
+            Cole os links aqui (um por linha — link 1 = questão 1 da lista acima)
+          </label>
+          <textarea
+            value={bulkLinks}
+            onChange={e => setBulkLinks(e.target.value)}
+            placeholder={"https://t.me/canal/123\nhttps://t.me/canal/124\nhttps://t.me/canal/125\n..."}
+            className="w-full h-48 bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none font-mono text-xs"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-white/30">
+              {bulkLinks.split('\n').filter(l => l.trim()).length} links colados
+              {filtered.length > 0 && ` → ${Math.min(bulkLinks.split('\n').filter(l => l.trim()).length, filtered.length)} questões serão atualizadas`}
+            </span>
+            <button
+              onClick={handleBulkSave}
+              disabled={saving || bulkLinks.split('\n').filter(l => l.trim()).length === 0}
+              className="flex items-center gap-2 px-8 py-3 bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-400 transition-all disabled:opacity-30 shadow-lg shadow-emerald-500/20">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Salvar Vídeos em Massa
+            </button>
+          </div>
+        </div>
+
+        {result && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl flex items-center gap-3">
+            <Check size={20} />
+            <p className="text-sm font-bold">{result}</p>
+          </div>
+        )}
       </div>
     </div>
   );
