@@ -555,7 +555,12 @@ export default function Questions() {
         result.length > 0 ? 'color: #10B981; font-weight: bold; font-size: 14px;' : 'color: #EF4444; font-weight: bold; font-size: 14px;');
     }
 
-    return result;
+    return result.sort((a, b) => {
+      const numA = parseInt(String(a.topic || '').replace(/\D/g, ''));
+      const numB = parseInt(String(b.topic || '').replace(/\D/g, ''));
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+      return 0;
+    });
   }, [questions, advFilters, searchTerm, questionAnswers]);
 
   const filtersActive = useMemo(() => {
