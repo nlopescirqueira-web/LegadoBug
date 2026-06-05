@@ -40,7 +40,11 @@ import {
   Video,
   Link,
   ExternalLink,
-  Save
+  Save,
+  Flag,
+  AlertOctagon,
+  Settings,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -350,6 +354,18 @@ export default function Questions() {
   // Gabarito editing (admin only)
   const [editingGabaritoQuestionId, setEditingGabaritoQuestionId] = useState<string | null>(null);
   const [editingGabaritoIndex, setEditingGabaritoIndex] = useState<number>(0);
+
+  // Admin: edit all fields
+  const [editingFieldsQuestionId, setEditingFieldsQuestionId] = useState<string | null>(null);
+  const [editingFields, setEditingFields] = useState<Record<string, any>>({});
+
+  // Error reports
+  const [reportingQuestionId, setReportingQuestionId] = useState<string | null>(null);
+  const [reportType, setReportType] = useState('');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reports, setReports] = useState<any[]>([]);
+  const [showReportsPanel, setShowReportsPanel] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -756,6 +772,88 @@ export default function Questions() {
     }
   };
 
+  // Admin: save all fields
+  const handleSaveFields = async (questionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update(editingFields)
+        .eq('id', questionId);
+      if (error) throw error;
+      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, ...editingFields } : q));
+      setEditingFieldsQuestionId(null);
+      setEditingFields({});
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+    }
+  };
+
+  // Error reports
+  const fetchReports = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('question_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setReports(data || []);
+    } catch (err: any) {
+      if (!err.message?.includes('does not exist') && err.code !== '42P01') {
+        console.error('Error fetching reports:', err);
+      }
+    }
+  }, []);
+
+  const handleSubmitReport = async (questionId: string) => {
+    if (!reportType) { alert('Selecione o tipo de erro.'); return; }
+    setReportSending(true);
+    try {
+      const q = questions.find(qq => qq.id === questionId);
+      const { error } = await supabase.from('question_reports').insert({
+        question_id: questionId,
+        question_text: q?.text?.substring(0, 200) || '',
+        question_subject: q?.subject || '',
+        question_topic: q?.topic || '',
+        report_type: reportType,
+        description: reportDescription,
+        reported_by: user?.email || user?.name || 'Anônimo',
+        user_id: user?.id || '',
+        status: 'pending',
+      });
+      if (error) throw error;
+      alert('Erro reportado com sucesso! A equipe irá analisar.');
+      setReportingQuestionId(null);
+      setReportType('');
+      setReportDescription('');
+      if (isAdmin) fetchReports();
+    } catch (err: any) {
+      alert('Erro ao enviar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setReportSending(false);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string) => {
+    try {
+      await supabase.from('question_reports').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', reportId);
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'resolved', resolved_at: new Date().toISOString() } : r));
+    } catch (err: any) {
+      alert('Erro: ' + err.message);
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      await supabase.from('question_reports').delete().eq('id', reportId);
+      setReports(prev => prev.filter(r => r.id !== reportId));
+    } catch (err: any) {
+      alert('Erro: ' + err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) fetchReports();
+  }, [isAdmin, fetchReports]);
+
   // Helper to load saved filter
   const loadSavedFilter = (filters: any) => {
     const { searchTerm: savedSearch, ...rest } = filters;
@@ -790,6 +888,18 @@ export default function Questions() {
           </div>
           Banco de Questões
         </h2>
+        {isAdmin && (
+          <button
+            onClick={() => { setShowReportsPanel(true); fetchReports(); }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 shadow-[0_0_15px_rgba(255,0,50,0.15)] hover:shadow-[0_0_25px_rgba(255,0,50,0.3)]"
+          >
+            <AlertOctagon size={16} className="animate-pulse" />
+            Reporte de Erros
+            {reports.filter(r => r.status === 'pending').length > 0 && (
+              <span className="ml-1 px-2 py-0.5 bg-red-500 text-white rounded-full text-[9px] font-black">{reports.filter(r => r.status === 'pending').length}</span>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="flex items-end gap-1 border-b border-white/5 overflow-x-auto no-scrollbar mb-10">
@@ -1481,8 +1591,31 @@ export default function Questions() {
                           <CheckCircle2 size={14} />
                           Gabarito
                         </button>
+                        <button
+                          onClick={() => {
+                            setEditingFieldsQuestionId(q.id);
+                            setEditingFields({
+                              subject: q.subject || '', topic: q.topic || '', year: q.year || '',
+                              institution: q.institution || '', org: q.org || '', difficulty: q.difficulty || 'Médio',
+                              text: q.text || '', explanation: q.explanation || '',
+                            });
+                          }}
+                          className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-[#3B82F6] hover:bg-[#3B82F6]/10"
+                          title="Editar todos os campos"
+                        >
+                          <Settings size={14} />
+                          Editar
+                        </button>
                       </>
                     )}
+                    <button
+                      onClick={() => { setReportingQuestionId(q.id); setReportType(''); setReportDescription(''); }}
+                      className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                      title="Reportar erro nesta questão"
+                    >
+                      <Flag size={14} />
+                      Reportar
+                    </button>
                   </div>
 
                   {/* Video Edit Modal */}
@@ -1606,6 +1739,119 @@ export default function Questions() {
                             className="px-6 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all"
                           >
                             Salvar Gabarito
+                          </button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+
+                  {/* Admin Edit All Fields Modal */}
+                  {editingFieldsQuestionId === q.id && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4"
+                      onClick={() => setEditingFieldsQuestionId(null)}>
+                      <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+                        className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-4"
+                        onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                            <Settings size={16} className="text-[#3B82F6]" /> Editar Campos da Questão
+                          </h3>
+                          <button onClick={() => setEditingFieldsQuestionId(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Disciplina</label>
+                            <input type="text" value={editingFields.subject || ''} onChange={e => setEditingFields(p => ({ ...p, subject: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6]" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Assunto (Topic)</label>
+                            <input type="text" value={editingFields.topic || ''} onChange={e => setEditingFields(p => ({ ...p, topic: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6]" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Ano</label>
+                            <input type="number" value={editingFields.year || ''} onChange={e => setEditingFields(p => ({ ...p, year: parseInt(e.target.value) || '' }))}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6]" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Banca (Institution)</label>
+                            <input type="text" value={editingFields.institution || ''} onChange={e => setEditingFields(p => ({ ...p, institution: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6]" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Órgão</label>
+                            <input type="text" value={editingFields.org || ''} onChange={e => setEditingFields(p => ({ ...p, org: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6]" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Dificuldade</label>
+                            <select value={editingFields.difficulty || 'Médio'} onChange={e => setEditingFields(p => ({ ...p, difficulty: e.target.value }))}
+                              className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none appearance-none" style={{ colorScheme: 'dark' }}>
+                              <option value="Fácil" className="bg-[#1a1a1a]">Fácil</option>
+                              <option value="Médio" className="bg-[#1a1a1a]">Médio</option>
+                              <option value="Difícil" className="bg-[#1a1a1a]">Difícil</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Enunciado</label>
+                          <textarea value={editingFields.text || ''} onChange={e => setEditingFields(p => ({ ...p, text: e.target.value }))}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6] min-h-[100px] resize-none" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Explicação</label>
+                          <textarea value={editingFields.explanation || ''} onChange={e => setEditingFields(p => ({ ...p, explanation: e.target.value }))}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#3B82F6] min-h-[80px] resize-none" />
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2">
+                          <button onClick={() => setEditingFieldsQuestionId(null)}
+                            className="px-4 py-2 bg-white/5 text-white/40 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10">Cancelar</button>
+                          <button onClick={() => handleSaveFields(q.id)}
+                            className="px-6 py-2 bg-[#3B82F6] text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#3B82F6]/80">Salvar Alterações</button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+
+                  {/* Report Error Modal */}
+                  {reportingQuestionId === q.id && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4"
+                      onClick={() => setReportingQuestionId(null)}>
+                      <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+                        className="bg-[#111] border border-red-500/20 rounded-2xl p-6 w-full max-w-md space-y-4"
+                        onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                            <Flag size={16} className="text-red-400" /> Reportar Erro
+                          </h3>
+                          <button onClick={() => setReportingQuestionId(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+                        </div>
+                        <p className="text-xs text-white/40 line-clamp-2">{q.text}</p>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Tipo do Erro</label>
+                          {['Gabarito errado', 'Enunciado com erro', 'Alternativa incorreta', 'Questão duplicada', 'Disciplina/assunto errado', 'Outro'].map(type => (
+                            <button key={type} onClick={() => setReportType(type)}
+                              className={cn("w-full text-left px-4 py-2.5 rounded-xl border text-xs font-bold transition-all",
+                                reportType === type ? "bg-red-500/10 border-red-500/30 text-red-400" : "border-white/5 text-white/50 hover:border-white/20")}>
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Descrição (opcional)</label>
+                          <textarea value={reportDescription} onChange={e => setReportDescription(e.target.value)}
+                            placeholder="Descreva o erro encontrado..."
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-red-500 min-h-[80px] resize-none" />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => setReportingQuestionId(null)}
+                            className="px-4 py-2 bg-white/5 text-white/40 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10">Cancelar</button>
+                          <button onClick={() => handleSubmitReport(q.id)} disabled={reportSending || !reportType}
+                            className="px-6 py-2 bg-red-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-400 disabled:opacity-30 transition-all flex items-center gap-2">
+                            {reportSending ? <Loader2 size={14} className="animate-spin" /> : <Flag size={14} />} Enviar Reporte
                           </button>
                         </div>
                       </motion.div>
@@ -1993,6 +2239,82 @@ export default function Questions() {
       {activeTopTab === 'bulk_videos' && isAdmin && (
         <BulkVideoEditor questions={questions} onUpdate={fetchQuestions} />
       )}
+
+      {/* Reports Panel */}
+      <AnimatePresence>
+        {showReportsPanel && isAdmin && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 z-[100] flex items-end sm:items-center justify-center" onClick={() => setShowReportsPanel(false)}>
+            <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
+              className="bg-[#0A0A0A] border border-red-500/20 rounded-t-3xl sm:rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(255,0,50,0.1)]"
+              onClick={e => e.stopPropagation()}>
+              <div className="p-6 border-b border-red-500/10 flex items-center justify-between shrink-0">
+                <h3 className="text-white font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                  <AlertOctagon size={20} className="text-red-400" />
+                  Reporte de Erros
+                  <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-3 py-1 rounded-lg border border-red-500/20">
+                    {reports.filter(r => r.status === 'pending').length} pendentes
+                  </span>
+                </h3>
+                <button onClick={() => setShowReportsPanel(false)} className="text-white/40 hover:text-white"><X size={24} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {reports.length === 0 ? (
+                  <div className="text-center py-16 text-white/20">
+                    <AlertOctagon size={40} className="mx-auto mb-4 opacity-30" />
+                    <p className="text-xs font-bold uppercase tracking-widest">Nenhum reporte de erro</p>
+                  </div>
+                ) : reports.map(r => (
+                  <div key={r.id} className={cn("border rounded-2xl p-4 space-y-2 transition-all",
+                    r.status === 'pending' ? "border-red-500/20 bg-red-500/5" : "border-white/5 bg-white/[0.02] opacity-60")}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest",
+                            r.status === 'pending' ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400")}>
+                            {r.status === 'pending' ? 'Pendente' : 'Resolvido'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase tracking-widest">{r.report_type}</span>
+                          <span className="text-[9px] text-white/30">{r.question_subject} • {r.question_topic}</span>
+                        </div>
+                        <p className="text-xs text-white/60 line-clamp-2 mb-1">{r.question_text}...</p>
+                        {r.description && <p className="text-xs text-white/40 italic">&ldquo;{r.description}&rdquo;</p>}
+                        <div className="flex items-center gap-3 mt-2 text-[9px] text-white/30">
+                          <span>Por: <strong className="text-white/50">{r.reported_by}</strong></span>
+                          <span>{new Date(r.created_at).toLocaleDateString('pt-BR')} às {new Date(r.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          {r.resolved_at && <span className="text-emerald-400/60">Resolvido em {new Date(r.resolved_at).toLocaleDateString('pt-BR')}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {r.status === 'pending' && (
+                          <button onClick={() => handleResolveReport(r.id)}
+                            className="p-2 text-white/20 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-all" title="Marcar como resolvido">
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
+                        <button onClick={() => {
+                          const q = questions.find(qq => qq.id === r.question_id);
+                          if (q) {
+                            setShowReportsPanel(false);
+                            setSearchTerm(q.text.substring(0, 30));
+                            setActiveTopTab('filter');
+                          }
+                        }} className="p-2 text-white/20 hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-all" title="Ver questão">
+                          <Eye size={16} />
+                        </button>
+                        <button onClick={() => handleDeleteReport(r.id)}
+                          className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Excluir reporte">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Admin Modal */}
       <AnimatePresence>
