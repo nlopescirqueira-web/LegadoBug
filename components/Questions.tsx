@@ -2275,6 +2275,11 @@ function BulkVideoEditor({ questions, onUpdate }: { questions: any[]; onUpdate: 
         if (url && url !== 'null' && url !== 'undefined') return false;
       }
       return true;
+    }).sort((a, b) => {
+      const numA = parseInt(String(a.topic || '').replace(/\D/g, '')) || 9999;
+      const numB = parseInt(String(b.topic || '').replace(/\D/g, '')) || 9999;
+      if (numA !== numB) return numA - numB;
+      return (a.created_at || '').localeCompare(b.created_at || '');
     });
   }, [questions, filterSubject, filterOrg, filterYear, filterNoVideo]);
 
