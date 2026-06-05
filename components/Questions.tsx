@@ -347,6 +347,10 @@ export default function Questions() {
   const [editingVideoQuestionId, setEditingVideoQuestionId] = useState<string | null>(null);
   const [editingVideoUrl, setEditingVideoUrl] = useState('');
 
+  // Gabarito editing (admin only)
+  const [editingGabaritoQuestionId, setEditingGabaritoQuestionId] = useState<string | null>(null);
+  const [editingGabaritoIndex, setEditingGabaritoIndex] = useState<number>(0);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -730,6 +734,20 @@ export default function Questions() {
       setEditingVideoUrl('');
     } catch (err: any) {
       alert('Erro ao salvar vídeo: ' + (err.message || 'Erro desconhecido'));
+    }
+  };
+
+  const handleSaveGabarito = async (questionId: string, newIndex: number) => {
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({ correct_option_index: newIndex })
+        .eq('id', questionId);
+      if (error) throw error;
+      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, correct_option_index: newIndex } : q));
+      setEditingGabaritoQuestionId(null);
+    } catch (err: any) {
+      alert('Erro ao salvar gabarito: ' + (err.message || 'Erro desconhecido'));
     }
   };
 
@@ -1435,17 +1453,30 @@ export default function Questions() {
                       Estatísticas
                     </button>
                     {isAdmin && (
-                      <button
-                        onClick={() => {
-                          setEditingVideoQuestionId(q.id);
-                          setEditingVideoUrl(q.video_url || '');
-                        }}
-                        className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-amber-400 hover:bg-amber-500/10"
-                        title="Editar link do vídeo"
-                      >
-                        <Pencil size={14} />
-                        Vídeo
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingVideoQuestionId(q.id);
+                            setEditingVideoUrl(q.video_url || '');
+                          }}
+                          className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-amber-400 hover:bg-amber-500/10"
+                          title="Editar link do vídeo"
+                        >
+                          <Pencil size={14} />
+                          Vídeo
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingGabaritoQuestionId(q.id);
+                            setEditingGabaritoIndex(q.correct_option_index ?? 0);
+                          }}
+                          className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10"
+                          title="Editar gabarito"
+                        >
+                          <CheckCircle2 size={14} />
+                          Gabarito
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -1504,6 +1535,72 @@ export default function Questions() {
                             className="px-6 py-2 bg-amber-500 text-black rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
                           >
                             Salvar
+                          </button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+
+                  {/* Gabarito Edit Modal */}
+                  {editingGabaritoQuestionId === q.id && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4"
+                      onClick={() => setEditingGabaritoQuestionId(null)}
+                    >
+                      <motion.div
+                        initial={{ scale: 0.9 }}
+                        animate={{ scale: 1 }}
+                        className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                            <CheckCircle2 size={16} className="text-emerald-400" />
+                            Editar Gabarito
+                          </h3>
+                          <button onClick={() => setEditingGabaritoQuestionId(null)} className="text-white/40 hover:text-white">
+                            <X size={20} />
+                          </button>
+                        </div>
+                        <p className="text-xs text-white/50 line-clamp-2">{q.text}</p>
+                        <div className="space-y-2">
+                          {(q.options || []).map((opt: string, optIdx: number) => (
+                            <button
+                              key={optIdx}
+                              onClick={() => setEditingGabaritoIndex(optIdx)}
+                              className={cn(
+                                "w-full text-left px-4 py-3 rounded-xl border text-sm transition-all flex items-center gap-3",
+                                editingGabaritoIndex === optIdx
+                                  ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
+                                  : "border-white/5 text-white/60 hover:border-white/20"
+                              )}
+                            >
+                              <span className={cn(
+                                "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 border transition-all",
+                                editingGabaritoIndex === optIdx
+                                  ? "border-emerald-500 bg-emerald-500 text-white"
+                                  : "border-white/10 text-white/40"
+                              )}>
+                                {String.fromCharCode(65 + optIdx)}
+                              </span>
+                              <span className="line-clamp-1">{opt}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2">
+                          <button
+                            onClick={() => setEditingGabaritoQuestionId(null)}
+                            className="px-4 py-2 bg-white/5 text-white/40 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => handleSaveGabarito(q.id, editingGabaritoIndex)}
+                            className="px-6 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all"
+                          >
+                            Salvar Gabarito
                           </button>
                         </div>
                       </motion.div>
