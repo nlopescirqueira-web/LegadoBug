@@ -80,7 +80,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         <div className="p-6 flex items-center gap-3">
           <div className="relative w-8 h-8 overflow-hidden rounded-lg">
             <Image 
-              src="/punisher-skull.jpg"
+              src="https://i.imgur.com/fb2559a2-3a37-437e-9974-e52afdd0b642.png"
               alt="Legado Militar Logo" 
               fill
               priority
