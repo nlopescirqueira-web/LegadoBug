@@ -637,9 +637,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             // Trust the DB streak more, especially if it's higher
             setStreak(prev => Math.max(prev, myStat.streak || 0));
             setDbStats({
-              today: myStat.daily_finished || 0,
-              weekly: myStat.weekly_finished || 0,
-              total: myStat.total_finished || 0
+              today: myStat.daily_seconds || 0,
+              weekly: myStat.weekly_seconds || 0,
+              total: myStat.total_seconds_all_time || 0
             });
           }
         

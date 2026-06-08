@@ -161,12 +161,12 @@ export default function Timer() {
             <div className="p-6 bg-[#0A0A0A] border border-white/5 rounded-3xl space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/80">Total na Disciplina (Hoje)</span>
-                <span className="text-sm font-black text-[#3B82F6]">{formatSeconds(stopwatchTime)}</span>
+                <span className="text-sm font-black text-[#3B82F6]">{formatSeconds(subjectTotalSeconds)}</span>
               </div>
               <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                    className="h-full bg-[#3B82F6]"
-                  animate={{ width: `${Math.min(100, (stopwatchTime / 3600) * 100)}%` }}
+                  animate={{ width: `${Math.min(100, (subjectTotalSeconds / 3600) * 100)}%` }}
                 />
               </div>
             </div>
@@ -186,7 +186,7 @@ export default function Timer() {
                     className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tight tabular-nums text-white leading-none select-none"
                     style={{ fontVariantNumeric: 'tabular-nums' }}
                   >
-                    {formatTimerTime(todayTotalSeconds)}
+                    {formatTimerTime(stopwatchSessionSeconds)}
                   </span>
                 </div>
               </div>
