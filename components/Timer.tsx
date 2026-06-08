@@ -1,29 +1,27 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { 
-  Play, 
-  Pause, 
+import {
+  Play,
+  Pause,
   ChevronDown,
-  Clock,
   Plus,
   X,
-  Target,
-  Zap,
   Shield,
-  Activity,
-  RotateCcw
+  RotateCcw,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStudy } from '@/context/StudyContext';
 import { cn } from '@/lib/utils';
 
 export default function Timer() {
-  const { 
+  const {
     todayTotalSeconds = 0,
+    weeklyTotalSeconds = 0,
+    allTimeSeconds = 0,
     formatSeconds = (s: number) => `${s}s`,
     stopwatchActive = false,
-    stopwatchTime = 0,
     stopwatchAccumulated = 0,
     stopwatchSessionSeconds = 0,
     toggleStopwatch = () => {},
@@ -35,7 +33,7 @@ export default function Timer() {
     deleteSubject = async () => {},
     dailySubjectsData = []
   } = useStudy();
-  
+
   const [showSubjectMenu, setShowSubjectMenu] = useState(false);
   const [newSubject, setNewSubject] = useState('');
 
@@ -71,32 +69,45 @@ export default function Timer() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatCompact = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 flex flex-col items-center justify-center">
       <div className="w-full max-w-4xl space-y-12">
-        
-        {/* Top Navigation / Status */}
+
+        {/* Top Stats Bar */}
         <div className="flex justify-between items-center border-b border-white/5 pb-6">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/95">Sessão Ativa</span>
+            <div className={cn("w-2 h-2 rounded-full", stopwatchActive ? "bg-[#3B82F6] animate-pulse" : "bg-white/20")} />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/95">
+              {stopwatchActive ? 'Estudando' : 'Pausado'}
+            </span>
           </div>
           <div className="flex items-center gap-6">
             <div className="text-right">
-              <p className="text-[9px] uppercase tracking-widest text-white/80 font-bold">Total Hoje</p>
-              <p className="text-lg font-black text-white tabular-nums">{formatSeconds(todayTotalSeconds)}</p>
+              <p className="text-[9px] uppercase tracking-widest text-white/40 font-bold">Semanal</p>
+              <p className="text-sm font-black text-white/60 tabular-nums">{formatCompact(weeklyTotalSeconds)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] uppercase tracking-widest text-white/40 font-bold">Total Geral</p>
+              <p className="text-sm font-black text-white/60 tabular-nums">{formatCompact(allTimeSeconds)}</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          
+
           {/* Left: Subject Control */}
-          <div className="lg:col-span-4 space-y-8">
+          <div className="lg:col-span-4 space-y-6">
             <div className="space-y-4">
-              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-[#3B82F6]">Objetivo</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-[#3B82F6]">Disciplina</h2>
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowSubjectMenu(!showSubjectMenu)}
                   className="w-full flex items-center justify-between p-5 bg-[#0A0A0A] border border-white/10 rounded-2xl hover:border-[#3B82F6]/50 transition-all group"
                 >
@@ -106,7 +117,7 @@ export default function Timer() {
 
                 <AnimatePresence>
                   {showSubjectMenu && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
@@ -114,7 +125,7 @@ export default function Timer() {
                     >
                       <div className="max-h-60 overflow-y-auto scrollbar-hide p-2 space-y-1">
                         {subjects.map((s) => (
-                          <div 
+                          <div
                             key={s}
                             className="group flex items-center justify-between w-full hover:bg-white/5 rounded-xl transition-colors"
                           >
@@ -136,16 +147,16 @@ export default function Timer() {
                           </div>
                         ))}
                       </div>
-                      
+
                       <form onSubmit={handleAddSubject} className="p-3 bg-white/5 flex gap-2 border-t border-white/5">
-                        <input 
+                        <input
                           type="text"
                           value={newSubject}
                           onChange={(e) => setNewSubject(e.target.value)}
                           placeholder="Nova Disciplina..."
                           className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all"
                         />
-                        <button 
+                        <button
                           type="submit"
                           className="w-8 h-8 flex-shrink-0 bg-[#3B82F6] text-white rounded-lg hover:opacity-80 transition-colors flex items-center justify-center"
                         >
@@ -158,16 +169,26 @@ export default function Timer() {
               </div>
             </div>
 
-            <div className="p-6 bg-[#0A0A0A] border border-white/5 rounded-3xl space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/80">Total na Disciplina (Hoje)</span>
-                <span className="text-sm font-black text-[#3B82F6]">{formatSeconds(subjectTotalSeconds)}</span>
+            {/* Stats Cards */}
+            <div className="space-y-3">
+              <div className="p-4 bg-[#0A0A0A] border border-white/5 rounded-2xl">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Esta Sessão</span>
+                  <span className="text-sm font-black text-white tabular-nums">{formatSeconds(stopwatchSessionSeconds)}</span>
+                </div>
               </div>
-              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
-                   className="h-full bg-[#3B82F6]"
-                  animate={{ width: `${Math.min(100, (subjectTotalSeconds / 3600) * 100)}%` }}
-                />
+
+              <div className="p-4 bg-[#0A0A0A] border border-white/5 rounded-2xl">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/50">{activeSubject} (Hoje)</span>
+                  <span className="text-sm font-black text-[#3B82F6] tabular-nums">{formatSeconds(subjectTotalSeconds)}</span>
+                </div>
+                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-[#3B82F6]"
+                    animate={{ width: `${Math.min(100, (subjectTotalSeconds / 3600) * 100)}%` }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -177,49 +198,49 @@ export default function Timer() {
             <div className="relative w-full flex flex-col items-center">
               <div className="relative z-10 text-center space-y-6 w-full px-4">
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-[0.6em] text-[#3B82F6] font-black">Sessão de Estudo Ativa</p>
+                  <p className="text-[10px] uppercase tracking-[0.6em] text-[#3B82F6] font-black">Total Hoje</p>
                   <div className="h-[1px] w-12 bg-[#3B82F6]/30 mx-auto" />
                 </div>
-                
+
                 <div className="flex justify-center items-center w-full min-h-[120px] sm:min-h-[160px]">
-                  <span 
+                  <span
                     className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tight tabular-nums text-white leading-none select-none"
                     style={{ fontVariantNumeric: 'tabular-nums' }}
                   >
-                    {formatTimerTime(stopwatchSessionSeconds)}
+                    {formatTimerTime(todayTotalSeconds)}
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-10">
-              <motion.button 
+              <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={resetStopwatch}
                 className="w-12 h-12 rounded-xl border border-white/10 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/5 transition-all"
-                title="Resetar Missão"
+                title="Resetar"
               >
                 <RotateCcw size={18} />
               </motion.button>
 
-              <motion.button 
+              <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={toggleStopwatch}
                 className={cn(
                   "w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center transition-all duration-500 shadow-2xl relative overflow-hidden",
-                  stopwatchActive 
-                    ? "bg-white/5 border border-white/20 text-white" 
+                  stopwatchActive
+                    ? "bg-white/5 border border-white/20 text-white"
                     : "bg-[#3B82F6] text-white"
                 )}
               >
                 <div className="relative z-10">
                   {stopwatchActive ? <Pause size={36} fill="currentColor" /> : <Play size={36} className="ml-1" fill="currentColor" />}
                 </div>
-                
+
                 {stopwatchActive && (
-                  <motion.div 
+                  <motion.div
                     className="absolute inset-0 bg-[#3B82F6]/10"
                     animate={{ opacity: [0.2, 0.5, 0.2] }}
                     transition={{ duration: 2, repeat: Infinity }}
