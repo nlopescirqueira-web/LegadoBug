@@ -173,8 +173,8 @@ export default function Timer() {
             <div className="space-y-3">
               <div className="p-4 bg-[#0A0A0A] border border-white/5 rounded-2xl">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Esta Sessão</span>
-                  <span className="text-sm font-black text-white tabular-nums">{formatSeconds(stopwatchSessionSeconds)}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Total Hoje</span>
+                  <span className="text-sm font-black text-white tabular-nums">{formatSeconds(todayTotalSeconds)}</span>
                 </div>
               </div>
 
@@ -198,7 +198,7 @@ export default function Timer() {
             <div className="relative w-full flex flex-col items-center">
               <div className="relative z-10 text-center space-y-6 w-full px-4">
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-[0.6em] text-[#3B82F6] font-black">Total Hoje</p>
+                  <p className="text-[10px] uppercase tracking-[0.6em] text-[#3B82F6] font-black">Sessão de Estudo</p>
                   <div className="h-[1px] w-12 bg-[#3B82F6]/30 mx-auto" />
                 </div>
 
@@ -207,7 +207,7 @@ export default function Timer() {
                     className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tight tabular-nums text-white leading-none select-none"
                     style={{ fontVariantNumeric: 'tabular-nums' }}
                   >
-                    {formatTimerTime(todayTotalSeconds)}
+                    {formatTimerTime(stopwatchSessionSeconds)}
                   </span>
                 </div>
               </div>
