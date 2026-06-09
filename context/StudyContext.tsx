@@ -318,83 +318,37 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Stopwatch state
+  // Stopwatch state — timestamp-based (immune to tab switches & drift)
   const [stopwatchActive, setStopwatchActive] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('stopwatchActive');
-      return saved === 'true';
+      return localStorage.getItem('stopwatchActive') === 'true';
     }
     return false;
   });
-  
-  // High-precision session counter (this is what the user expects to see as "50s")
-  const [stopwatchSessionSeconds, setStopwatchSessionSeconds] = useState(() => {
+
+  // When the current session started (Date.now() timestamp)
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(() => {
     if (typeof window !== 'undefined') {
       const active = localStorage.getItem('stopwatchActive') === 'true';
-      const lastTick = localStorage.getItem('lastStopwatchTick');
-      const savedSession = localStorage.getItem('stopwatchSessionSeconds');
-      let base = savedSession ? parseInt(savedSession) : 0;
-      
-      if (active && lastTick) {
-        const elapsed = Math.floor((Date.now() - parseInt(lastTick)) / 1000);
-        if (elapsed > 0) base += elapsed;
-      }
-      return base;
+      const saved = localStorage.getItem('sessionStartedAt');
+      if (active && saved) return parseInt(saved);
     }
-    return 0;
+    return null;
   });
 
-  const [stopwatchTime, setStopwatchTime] = useState(() => {
+  // When the last periodic sync happened (Date.now() timestamp)
+  const [lastSyncAt, setLastSyncAt] = useState<number>(() => {
     if (typeof window !== 'undefined') {
-      const lastReset = localStorage.getItem('last_midnight_reset');
-      const now = new Date();
-      const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(now);
-      
-      if (lastReset && lastReset !== todayStr) return 0;
-
-      const activeSub = localStorage.getItem('activeSubject') || 'Português';
-      const savedDailyData = localStorage.getItem('dailySubjectsData');
-      let baseTime = 0;
-      
-      if (savedDailyData) {
-        try {
-          const dailyData: SubjectData[] = JSON.parse(savedDailyData);
-          const subData = dailyData.find(s => s.name === activeSub);
-          if (subData) baseTime = subData.seconds;
-        } catch (e) {}
-      }
-
-      const savedStopwatchTime = localStorage.getItem('stopwatchTime');
-      if (savedStopwatchTime) baseTime = Math.max(baseTime, parseInt(savedStopwatchTime));
-
-      const active = localStorage.getItem('stopwatchActive') === 'true';
-      const lastTick = localStorage.getItem('lastStopwatchTick');
-      if (active && lastTick) {
-        const elapsed = Math.floor((Date.now() - parseInt(lastTick)) / 1000);
-        if (elapsed > 0) baseTime += elapsed;
-      }
-      return baseTime;
+      const saved = localStorage.getItem('lastSyncAt');
+      return saved ? parseInt(saved) : Date.now();
     }
-    return 0;
+    return Date.now();
   });
 
-  const [stopwatchAccumulated, setStopwatchAccumulated] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('stopwatchAccumulated');
-      let base = saved ? parseInt(saved) : 0;
-      
-      const active = localStorage.getItem('stopwatchActive') === 'true';
-      const lastTick = localStorage.getItem('lastStopwatchTick');
-      if (active && lastTick) {
-        const elapsed = Math.floor((Date.now() - parseInt(lastTick)) / 1000);
-        if (elapsed > 0) base += elapsed;
-      }
-      return base;
-    }
-    return 0;
-  });
-
-  const lastStopwatchTickRef = React.useRef<number | null>(null);
+  // Derived counters — recomputed every second by the heartbeat
+  const [stopwatchSessionSeconds, setStopwatchSessionSeconds] = useState(0);
+  const [stopwatchAccumulated, setStopwatchAccumulated] = useState(0);
+  const [stopwatchTime, setStopwatchTime] = useState(0);
   const [activeSubject, setInternalActiveSubject] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('activeSubject') || 'Português';
@@ -790,26 +744,31 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const setActiveSubject = useCallback((newSubject: string) => {
     setInternalActiveSubject(prev => {
       if (prev === newSubject) return prev;
-      
-      // When changing subject, if there's un-synced time, sync it to the OLD subject first
-      if (stopwatchAccumulated >= 1) {
-        console.log(`[StudyContext] Changing subject from ${prev} to ${newSubject}. Syncing ${stopwatchAccumulated}s to ${prev}.`);
-        addStudyTime(stopwatchAccumulated, prev);
-        syncStudyTimeToDb(stopwatchAccumulated, prev, true);
-        setStopwatchAccumulated(0);
-        // stopwatchTime (the session timer) is NOT reset, as per user request "APENAS o acumulado reseta"
+
+      // When changing subject, sync un-synced time to the OLD subject
+      if (stopwatchActiveRef.current) {
+        const syncAnchor = lastSyncAtRef.current;
+        const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
+        if (unsyncedSecs >= 1) {
+          console.log(`[StudyContext] Changing subject from ${prev} to ${newSubject}. Syncing ${unsyncedSecs}s to ${prev}.`);
+          addStudyTime(unsyncedSecs, prev);
+          syncStudyTimeToDb(unsyncedSecs, prev, true);
+          const now = Date.now();
+          setLastSyncAt(now);
+          lastSyncAtRef.current = now;
+          localStorage.setItem('lastSyncAt', now.toString());
+        }
       }
-      
-      // Persist active subject to DB
+
       if (user) {
         supabase.from('profiles').update({ active_subject: newSubject }).eq('id', user.id).then(() => {
           console.log('[StudyContext] Active subject updated in DB:', newSubject);
         });
       }
-      
+
       return newSubject;
     });
-  }, [stopwatchAccumulated, addStudyTime, syncStudyTimeToDb, user]);
+  }, [addStudyTime, syncStudyTimeToDb, user]);
 
   const getRank = useCallback((seconds: number) => {
     const hours = seconds / 3600;
@@ -981,12 +940,23 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const now = Date.now();
 
     if (!stopwatchActive) {
+      // START
+      setSessionStartedAt(now);
+      sessionStartedAtRef.current = now;
+      setLastSyncAt(now);
+      lastSyncAtRef.current = now;
+      setStopwatchSessionSeconds(0);
+      setStopwatchAccumulated(0);
+      setStopwatchActive(true);
+
+      localStorage.setItem('stopwatchActive', 'true');
+      localStorage.setItem('sessionStartedAt', now.toString());
+      localStorage.setItem('lastSyncAt', now.toString());
+
       const currentTodayBase = todayTotalSeconds;
       setActiveSessionInitialSeconds(currentTodayBase);
-      lastStopwatchTickRef.current = now;
       updateStreak();
 
-      // Sync to SQL using the new durable function
       supabase.rpc('start_study_session', {
         p_user_id: user.id,
         p_subject: activeSubject,
@@ -994,22 +964,19 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       }).then(({ error }) => {
         if (error) console.error('[StudyContext] Error starting durable session:', error);
       });
-
-      setStopwatchActive(true);
-      setStopwatchSessionSeconds(0);
     } else {
-      // DESLIGOU STOPWATCH
-      // Use the durable server-side calculation for the final record
+      // STOP — sync any un-synced time first
+      const syncAnchor = lastSyncAtRef.current;
+      const unsyncedSecs = Math.floor((now - syncAnchor) / 1000);
+
       supabase.rpc('end_study_session', {
         p_user_id: user.id
       }).then(({ data: duration, error }) => {
         if (error) {
           console.error('[StudyContext] Error ending durable session:', error);
-          // Fallback to client-side sync if RPC fails
-          const toSync = stopwatchAccumulated;
-          if (toSync >= 1) {
-            addStudyTime(toSync, activeSubject);
-            syncStudyTimeToDb(toSync, activeSubject, true);
+          if (unsyncedSecs >= 1) {
+            addStudyTime(unsyncedSecs, activeSubject);
+            syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
           }
         } else if (duration > 0) {
           console.log(`[StudyContext] Durable session ended. Duration: ${duration}s`);
@@ -1019,26 +986,37 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       });
 
       setStopwatchActive(false);
+      setSessionStartedAt(null);
+      sessionStartedAtRef.current = null;
       setStopwatchAccumulated(0);
+      setStopwatchSessionSeconds(0);
       setActiveSessionInitialSeconds(0);
+
+      localStorage.setItem('stopwatchActive', 'false');
+      localStorage.removeItem('sessionStartedAt');
     }
-  }, [user, stopwatchActive, stopwatchAccumulated, activeSubject, syncStudyTimeToDb, addStudyTime, updateStreak, todayTotalSeconds, fetchRanking]);
+  }, [user, stopwatchActive, activeSubject, syncStudyTimeToDb, addStudyTime, updateStreak, todayTotalSeconds, fetchRanking]);
 
   const resetStopwatch = useCallback(() => {
-    const toSync = stopwatchAccumulated;
-    if (stopwatchActive && toSync >= 60) {
-      setStopwatchAccumulated(0);
-      addStudyTime(toSync, activeSubject);
-      syncStudyTimeToDb(toSync, activeSubject, true);
+    if (stopwatchActive) {
+      const syncAnchor = lastSyncAtRef.current;
+      const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
+      if (unsyncedSecs >= 1) {
+        addStudyTime(unsyncedSecs, activeSubject);
+        syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
+      }
     }
     setStopwatchActive(false);
+    setSessionStartedAt(null);
+    sessionStartedAtRef.current = null;
     setStopwatchTime(0);
     setStopwatchAccumulated(0);
     setStopwatchSessionSeconds(0);
-    localStorage.removeItem('stopwatchTime');
-    localStorage.removeItem('stopwatchAccumulated');
-    localStorage.removeItem('stopwatchSessionSeconds');
-  }, [stopwatchActive, stopwatchAccumulated, activeSubject, syncStudyTimeToDb, addStudyTime]);
+
+    localStorage.setItem('stopwatchActive', 'false');
+    localStorage.removeItem('sessionStartedAt');
+    localStorage.removeItem('lastSyncAt');
+  }, [stopwatchActive, activeSubject, syncStudyTimeToDb, addStudyTime]);
 
   const currentSessionSecondsRef = React.useRef(0);
   const todayTotalSecondsRef = React.useRef(0);
@@ -1178,112 +1156,92 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }, [stopwatchActive]);
 
   const stopwatchActiveRef = React.useRef(stopwatchActive);
-  const stopwatchTimeRef = React.useRef(stopwatchTime);
+  const sessionStartedAtRef = React.useRef(sessionStartedAt);
+  const lastSyncAtRef = React.useRef(lastSyncAt);
   const stopwatchAccumulatedRef = React.useRef(stopwatchAccumulated);
   const stopwatchSessionSecondsRef = React.useRef(stopwatchSessionSeconds);
   const activeSubjectRef = React.useRef(activeSubject);
 
   useEffect(() => { stopwatchActiveRef.current = stopwatchActive; }, [stopwatchActive]);
-  useEffect(() => { stopwatchTimeRef.current = stopwatchTime; }, [stopwatchTime]);
+  useEffect(() => { sessionStartedAtRef.current = sessionStartedAt; }, [sessionStartedAt]);
+  useEffect(() => { lastSyncAtRef.current = lastSyncAt; }, [lastSyncAt]);
   useEffect(() => { stopwatchAccumulatedRef.current = stopwatchAccumulated; }, [stopwatchAccumulated]);
   useEffect(() => { stopwatchSessionSecondsRef.current = stopwatchSessionSeconds; }, [stopwatchSessionSeconds]);
   useEffect(() => { activeSubjectRef.current = activeSubject; }, [activeSubject]);
 
-  const lastPeriodicSyncRef = React.useRef(Date.now());
-
-  // Timer and Stopwatch Loop
+  // Timer heartbeat — recomputes derived values from timestamps every second
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    // Always run a heartbeat interval for UI updates (like ranking)
     const heartbeat = setInterval(() => {
       setTotalStudyTime(Date.now());
+
+      const start = sessionStartedAtRef.current;
+      if (stopwatchActiveRef.current && start) {
+        const now = Date.now();
+        const sessionSecs = Math.floor((now - start) / 1000);
+        const syncAnchor = lastSyncAtRef.current;
+        const unsyncedSecs = Math.floor((now - syncAnchor) / 1000);
+
+        setStopwatchSessionSeconds(sessionSecs);
+        setStopwatchAccumulated(unsyncedSecs);
+      }
     }, 1000);
 
-    if (stopwatchActive) {
-      // Initialize tick refs if they are null
-      const now = Date.now();
-      if (stopwatchActive && lastStopwatchTickRef.current === null) {
-        lastStopwatchTickRef.current = now;
-      }
+    return () => clearInterval(heartbeat);
+  }, []);
 
-      // Use a more frequent interval (100ms) for smoother updates and less drift impact
-      interval = setInterval(() => {
-        const currentTime = Date.now();
-
-        if (stopwatchActive && lastStopwatchTickRef.current !== null) {
-          const deltaMs = currentTime - lastStopwatchTickRef.current;
-          if (deltaMs >= 1000) {
-            const deltaSeconds = Math.floor(deltaMs / 1000);
-            
-            // Critical updates via functional updates to ensure we have latest state
-            setStopwatchTime(prev => prev + deltaSeconds);
-            setStopwatchAccumulated(prev => prev + deltaSeconds);
-            setStopwatchSessionSeconds(prev => prev + deltaSeconds);
-            
-            lastStopwatchTickRef.current += deltaSeconds * 1000; // Precise anchor update to avoid drift
-            
-            // Persist to localStorage periodically
-            localStorage.setItem('stopwatchTime', (stopwatchTimeRef.current + deltaSeconds).toString());
-            localStorage.setItem('lastStopwatchTick', lastStopwatchTickRef.current.toString());
-            localStorage.setItem('stopwatchAccumulated', (stopwatchAccumulatedRef.current + deltaSeconds).toString());
-            localStorage.setItem('stopwatchSessionSeconds', (stopwatchSessionSecondsRef.current + deltaSeconds).toString());
-          }
-        }
-      }, 100);
-    } else {
-      lastStopwatchTickRef.current = null;
-    }
-
-    // Periodic Sync to DB (every 60 seconds)
+  // Periodic sync to DB (every 60 seconds)
+  useEffect(() => {
     const periodicSync = setInterval(() => {
-      if (stopwatchActiveRef.current && stopwatchAccumulatedRef.current >= 5) {
-        const secondsToSync = stopwatchAccumulatedRef.current;
-        const sub = activeSubjectRef.current;
-        console.log(`[StudyContext] Periodic sync: ${secondsToSync}s to ${sub}`);
-        
-        // Optimistic local update followed by DB sync
-        addStudyTime(secondsToSync, sub);
-        syncStudyTimeToDb(secondsToSync, sub, true); // true to skip local update since we just did it
-        setStopwatchAccumulated(0);
-      }
+      if (!stopwatchActiveRef.current) return;
+      const syncAnchor = lastSyncAtRef.current;
+      const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
+      if (unsyncedSecs < 5) return;
+
+      const sub = activeSubjectRef.current;
+      console.log(`[StudyContext] Periodic sync: ${unsyncedSecs}s to ${sub}`);
+      addStudyTime(unsyncedSecs, sub);
+      syncStudyTimeToDb(unsyncedSecs, sub, true);
+
+      const now = Date.now();
+      setLastSyncAt(now);
+      lastSyncAtRef.current = now;
+      localStorage.setItem('lastSyncAt', now.toString());
     }, 60000);
 
-    return () => {
-      if (interval) clearInterval(interval);
-      clearInterval(heartbeat);
-      clearInterval(periodicSync);
-    };
-  }, [stopwatchActive, syncStudyTimeToDb, addStudyTime]);
+    return () => clearInterval(periodicSync);
+  }, [syncStudyTimeToDb, addStudyTime]);
 
   // Sync to DB on page unload or visibility change
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (stopwatchAccumulatedRef.current >= 1) {
-        localStorage.setItem('stopwatchAccumulated', stopwatchAccumulatedRef.current.toString());
-      }
+    const syncUnsaved = () => {
+      if (!stopwatchActiveRef.current) return;
+      const syncAnchor = lastSyncAtRef.current;
+      const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
+      if (unsyncedSecs < 1) return;
+
+      console.log(`[StudyContext] Visibility/unload sync: ${unsyncedSecs}s`);
+      addStudyTime(unsyncedSecs, activeSubjectRef.current);
+      syncStudyTimeToDb(unsyncedSecs, activeSubjectRef.current, true);
+
+      const now = Date.now();
+      setLastSyncAt(now);
+      lastSyncAtRef.current = now;
+      localStorage.setItem('lastSyncAt', now.toString());
     };
 
+    const handleBeforeUnload = () => syncUnsaved();
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        const seconds = stopwatchAccumulatedRef.current;
-        if (seconds >= 1) {
-          console.log(`[StudyContext] Visibility sync: ${seconds}s`);
-          addStudyTime(seconds, activeSubjectRef.current);
-          syncStudyTimeToDb(seconds, activeSubjectRef.current, true);
-          setStopwatchAccumulated(0);
-        }
-      }
+      if (document.visibilityState === 'hidden') syncUnsaved();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [activeSubject, syncStudyTimeToDb, stopwatchActive, addStudyTime]);
+  }, [syncStudyTimeToDb, addStudyTime]);
 
   // Global Data Fetching (Ranking & Profiles)
   useEffect(() => {
@@ -1409,14 +1367,20 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             const startTime = new Date(profile.active_session_start).getTime();
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
             const initial = profile.active_session_initial_seconds || 0;
-            
+
             console.log(`[StudyContext] Recovering STOPWATCH from SQL: ${elapsed}s elapsed, initial: ${initial}s`);
-            setStopwatchTime(initial + elapsed);
-            setStopwatchAccumulated(elapsed);
+            setSessionStartedAt(startTime);
+            sessionStartedAtRef.current = startTime;
+            setLastSyncAt(Date.now());
+            lastSyncAtRef.current = Date.now();
             setStopwatchSessionSeconds(elapsed);
+            setStopwatchAccumulated(0);
             setActiveSessionInitialSeconds(initial);
             setStopwatchActive(true);
-            lastStopwatchTickRef.current = startTime + (elapsed * 1000);
+
+            localStorage.setItem('stopwatchActive', 'true');
+            localStorage.setItem('sessionStartedAt', startTime.toString());
+            localStorage.setItem('lastSyncAt', Date.now().toString());
           }
         }
         
@@ -1572,25 +1536,34 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
         if (dbType === 'stopwatch' && dbStart) {
           const startTime = new Date(dbStart).getTime();
-          const isDifferentSession = !lastStopwatchTickRef.current || Math.abs(new Date(lastStopwatchTickRef.current).getTime() - startTime) > 5000;
+          const isDifferentSession = !sessionStartedAtRef.current || Math.abs(sessionStartedAtRef.current - startTime) > 5000;
 
           if (!stopwatchActiveRef.current || isDifferentSession) {
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            console.log(`[StudyContext] Remote STOPWATCH detected. Syncing local state. Elapsed: ${elapsed}s, Initial: ${dbInitial}s`);
-            
-            setStopwatchTime(dbInitial + elapsed);
-            setStopwatchAccumulated(elapsed);
+            console.log(`[StudyContext] Remote STOPWATCH detected. Elapsed: ${elapsed}s, Initial: ${dbInitial}s`);
+
+            setSessionStartedAt(startTime);
+            sessionStartedAtRef.current = startTime;
+            setLastSyncAt(Date.now());
+            lastSyncAtRef.current = Date.now();
             setStopwatchSessionSeconds(elapsed);
+            setStopwatchAccumulated(0);
             setActiveSessionInitialSeconds(dbInitial);
             setStopwatchActive(true);
-            lastStopwatchTickRef.current = startTime + (elapsed * 1000);
+
+            localStorage.setItem('stopwatchActive', 'true');
+            localStorage.setItem('sessionStartedAt', startTime.toString());
           }
         } else if (!dbType) {
           if (stopwatchActiveRef.current) {
             console.log('[StudyContext] Stopwatch stopped from another device.');
             setStopwatchActive(false);
+            setSessionStartedAt(null);
+            sessionStartedAtRef.current = null;
             setStopwatchAccumulated(0);
             setActiveSessionInitialSeconds(0);
+            localStorage.setItem('stopwatchActive', 'false');
+            localStorage.removeItem('sessionStartedAt');
             fetchRanking(true);
           }
         }
@@ -1712,38 +1685,34 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     // Reset timers and accumulated seconds
     const performMidnightReset = (isStudyingNow: boolean) => {
       console.log('Midnight detected! Resetting daily timers...');
-      
-      if (!isStudyingNow) {
-        setStopwatchTime(0);
-        setStopwatchAccumulated(0);
-        setStopwatchSessionSeconds(0);
-        localStorage.setItem('stopwatchTime', '0');
-        localStorage.setItem('stopwatchAccumulated', '0');
-        localStorage.setItem('stopwatchSessionSeconds', '0');
-      } else {
-        // User is studying across midnight.
-        // 1. Sync time accumulated UP TO NOW to the previous day
-        const toSync = stopwatchAccumulatedRef.current;
-        if (toSync >= 1) {
-          console.log(`[StudyContext] Midnight transition while studying! Syncing ${toSync}s to previous day.`);
-          addStudyTime(toSync, activeSubjectRef.current);
-          syncStudyTimeToDb(toSync, activeSubjectRef.current, true);
+
+      if (isStudyingNow) {
+        // Sync un-synced time to the previous day
+        const syncAnchor = lastSyncAtRef.current;
+        const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
+        if (unsyncedSecs >= 1) {
+          console.log(`[StudyContext] Midnight transition while studying! Syncing ${unsyncedSecs}s to previous day.`);
+          addStudyTime(unsyncedSecs, activeSubjectRef.current);
+          syncStudyTimeToDb(unsyncedSecs, activeSubjectRef.current, true);
         }
-        
-        // 2. Reset local counters for the NEW day
-        setStopwatchAccumulated(0);
-        setStopwatchTime(0);
-        setStopwatchSessionSeconds(0);
-        
-        localStorage.setItem('stopwatchAccumulated', '0');
-        localStorage.setItem('stopwatchTime', '0');
-        localStorage.setItem('stopwatchSessionSeconds', '0');
-        
-        // 3. Update the tick anchor to now to continue naturally on the new day
-        lastStopwatchTickRef.current = Date.now();
-        localStorage.setItem('lastStopwatchTick', lastStopwatchTickRef.current.toString());
+        // Reset sync anchor to now for the new day
+        const now = Date.now();
+        setLastSyncAt(now);
+        lastSyncAtRef.current = now;
+        localStorage.setItem('lastSyncAt', now.toString());
+        // Reset session start to now so session counter restarts for new day
+        setSessionStartedAt(now);
+        sessionStartedAtRef.current = now;
+        localStorage.setItem('sessionStartedAt', now.toString());
+      } else {
+        setSessionStartedAt(null);
+        sessionStartedAtRef.current = null;
+        localStorage.removeItem('sessionStartedAt');
       }
-      
+
+      setStopwatchTime(0);
+      setStopwatchAccumulated(0);
+      setStopwatchSessionSeconds(0);
       setDailySubjectsData([]);
       localStorage.setItem('dailySubjectsData', '[]');
     };
@@ -1951,24 +1920,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(syncInterval);
   }, [user, presenceChannel, isPresenceSubscribed, stopwatchActive, profileMap, lastSyncTimestamp]);
 
-  const lastSubjectRef = React.useRef(activeSubject);
-
-  // Sync stopwatchTime with daily total when not active or on subject change
-  useEffect(() => {
-    if (!stopwatchActive) {
-      const subjectData = dailySubjectsData.find(s => s.name === activeSubject);
-      const totalSeconds = subjectData ? subjectData.seconds : 0;
-      const newValue = totalSeconds + stopwatchAccumulated;
-      
-      if (lastSubjectRef.current !== activeSubject) {
-        setStopwatchTime(newValue);
-        lastSubjectRef.current = activeSubject;
-      } else {
-        // Use Math.max to prevent "jump back" during async state updates when pausing
-        setStopwatchTime(prev => Math.max(prev, newValue));
-      }
-    }
-  }, [activeSubject, dailySubjectsData, stopwatchActive, stopwatchAccumulated]);
+  // stopwatchTime is no longer independently tracked — kept for API compatibility
 
   const daysSinceLastStudy = useMemo(() => {
     if (!lastStudyDate) return 0;

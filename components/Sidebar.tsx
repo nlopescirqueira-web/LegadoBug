@@ -78,14 +78,12 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 bg-[#050505] border-r border-white/10 flex-col h-screen fixed left-0 top-0 transition-colors duration-300 overflow-y-auto no-scrollbar">
         <div className="p-6 flex items-center gap-3">
-          <div className="relative w-8 h-8 overflow-hidden rounded-lg">
-            <Image 
+          <div className="w-8 h-8 overflow-hidden rounded-lg flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="https://i.imgur.com/Ww70Xrl.jpeg"
-              alt="Legado Militar Logo" 
-              fill
-              priority
-              loading="eager"
-              className="object-contain"
+              alt="Legado Militar Logo"
+              className="w-full h-full object-contain"
               referrerPolicy="no-referrer"
             />
           </div>
