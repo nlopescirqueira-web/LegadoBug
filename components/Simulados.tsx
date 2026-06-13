@@ -8,7 +8,7 @@ import {
   HelpCircle, Calendar, Clock, Play, Pause, ChevronLeft, ChevronRight, Trophy,
   Sparkles, AlertTriangle, BarChart3, Scissors, X, FileText, Users, Settings2,
   Trash2, Eye, EyeOff, Pencil, Video, BrainCircuit, GraduationCap, Target,
-  ListOrdered, Save, ArrowRight, RotateCcw, Building2, Medal, Crown
+  ListOrdered, Save, ArrowRight, RotateCcw, Building2, Medal, Crown, MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useStudy } from '@/context/StudyContext';
 import SmartImport from './SmartImport';
+import QuestionDiscussion from './QuestionDiscussion';
 
 interface SimuladoQuestion {
   id: string;
@@ -674,6 +675,15 @@ export default function Simulados() {
                       {q.topic && <span className="bg-white/5 px-2 py-1 rounded">{q.topic}</span>}
                       {q.org && <span className="bg-white/5 px-2 py-1 rounded">{q.org}</span>}
                       {q.year && <span className="bg-white/5 px-2 py-1 rounded">{q.year}</span>}
+                    </div>
+
+                    {/* Feedback / Discussion */}
+                    <div className="border-t border-white/5 pt-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <MessageSquare size={14} className="text-[#3B82F6]" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#3B82F6]">Feedback & Discussão</span>
+                      </div>
+                      <QuestionDiscussion questionId={q.id} />
                     </div>
                   </div>
                 )}
