@@ -20,7 +20,8 @@ import {
   Medal,
   Crown,
   Zap,
-  Target
+  Target,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -65,6 +66,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'simulados', label: 'Simulados', icon: Target },
     { id: 'desempenho', label: 'Desempenho', icon: TrendingUp },
     { id: 'cronograma', label: 'Cronograma', icon: Calendar },
+    { id: 'feedback', label: 'Feedback', icon: MessageSquare },
     { id: 'tutorial', label: 'Tutorial', icon: PlayCircle },
   ];
 

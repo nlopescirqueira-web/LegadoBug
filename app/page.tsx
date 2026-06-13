@@ -13,6 +13,7 @@ import Performance from '@/components/Performance';
 import Schedule from '@/components/Schedule';
 import Tutorial from '@/components/Tutorial';
 import Simulados from '@/components/Simulados';
+import Feedback from '@/components/Feedback';
 import AuthPage from '@/components/AuthPage';
 import { AnimatePresence, motion } from 'motion/react';
 import { StudyProvider } from '@/context/StudyContext';
@@ -90,6 +91,8 @@ function TabContent({ activeTab }: { activeTab: string }) {
       return <Schedule />;
     case 'simulados':
       return <Simulados />;
+    case 'feedback':
+      return <Feedback />;
     case 'tutorial':
       return isAdmin ? <Tutorial /> : <Dashboard />;
     case 'perfil':
