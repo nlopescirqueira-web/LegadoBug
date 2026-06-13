@@ -66,13 +66,13 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'simulados', label: 'Simulados', icon: Target },
     { id: 'desempenho', label: 'Desempenho', icon: TrendingUp },
     { id: 'cronograma', label: 'Cronograma', icon: Calendar },
-    { id: 'feedback', label: 'Feedback', icon: MessageSquare },
-    { id: 'tutorial', label: 'Tutorial', icon: PlayCircle },
+    { id: 'feedback', label: 'Feedback', icon: MessageSquare, adminOnly: true },
+    { id: 'tutorial', label: 'Tutorial', icon: PlayCircle, adminOnly: true },
   ];
 
   const footerItems = [
-    { id: 'perfil', label: 'Perfil', icon: User },
-    { id: 'configuracoes', label: 'Configurações', icon: Settings },
+    { id: 'perfil', label: 'Perfil', icon: User, adminOnly: false },
+    { id: 'configuracoes', label: 'Configurações', icon: Settings, adminOnly: false },
   ];
 
   return (
@@ -94,15 +94,15 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
 
         <nav className="flex-1 px-4 mt-4 space-y-2">
           {menuItems
-            .filter(item => item.id !== 'tutorial' || isAdmin)
+            .filter(item => !item.adminOnly || isAdmin)
             .map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
-                activeTab === item.id 
-                  ? "bg-[#3B82F6]/10 text-[#3B82F6]" 
+                activeTab === item.id
+                  ? "bg-[#3B82F6]/10 text-[#3B82F6]"
                   : "text-white/50 hover:text-white hover:bg-white/5"
               )}
             >
@@ -217,7 +217,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         <div className="px-2 py-2 flex items-center overflow-x-auto no-scrollbar scroll-smooth">
           <div className="flex items-center gap-1 min-w-full px-2">
             {[...menuItems, ...footerItems]
-              .filter(item => item.id !== 'tutorial' || isAdmin)
+              .filter(item => !item.adminOnly || isAdmin)
               .map((item) => (
               <button
                 key={item.id}
