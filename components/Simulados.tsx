@@ -229,14 +229,7 @@ export default function Simulados() {
   const handleStartSimulado = async (sim: Simulado) => {
     const existingAttempt = attempts.find(a => a.simulado_id === sim.id);
 
-    if (existingAttempt?.finished_at) {
-      setCurrentAttempt(existingAttempt);
-      setSelectedSimulado(sim);
-      setActiveView('result');
-      return;
-    }
-
-    // Fetch full question data for the simulado
+    // Fetch full question data
     const questionIds = (sim.questions || []).map(q => q.question_id);
     if (questionIds.length === 0) { alert('Este simulado não possui questões.'); return; }
 
@@ -247,7 +240,6 @@ export default function Simulados() {
 
     if (!questionData || questionData.length === 0) { alert('Questões não encontradas.'); return; }
 
-    // Sort by order_index
     const ordered = (sim.questions || [])
       .sort((a, b) => a.order_index - b.order_index)
       .map(sq => {
@@ -257,6 +249,15 @@ export default function Simulados() {
       .filter(Boolean);
 
     setSolveQuestions(ordered);
+
+    if (existingAttempt?.finished_at) {
+      setCurrentAttempt(existingAttempt);
+      setSolveAnswers(existingAttempt.answers || {});
+      setSelectedSimulado(sim);
+      setActiveView('result');
+      return;
+    }
+
     setSolveCurrentIdx(0);
     setSolveTimeLeft(sim.total_time_minutes * 60);
     setSolveFinished(false);
@@ -429,6 +430,22 @@ export default function Simulados() {
     });
   };
 
+  const [expandedResultQuestions, setExpandedResultQuestions] = useState<Set<string>>(new Set());
+
+  const toggleResultExpand = (qId: string) => {
+    setExpandedResultQuestions(prev => {
+      const next = new Set(prev);
+      if (next.has(qId)) next.delete(qId); else next.add(qId);
+      return next;
+    });
+  };
+
+  const isYouTubeUrl = (url: string) => /youtube\.com|youtu\.be/i.test(url);
+  const getYouTubeEmbedUrl = (url: string) => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
+    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
+  };
+
   // ====================== RENDER ======================
 
   // RESULT VIEW
@@ -438,7 +455,7 @@ export default function Simulados() {
     const score = currentAttempt.score || 0;
     return (
       <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-        <button onClick={() => { setActiveView('list'); setSelectedSimulado(null); }}
+        <button onClick={() => { setActiveView('list'); setSelectedSimulado(null); setExpandedResultQuestions(new Set()); }}
           className="flex items-center gap-2 text-white/40 hover:text-white transition-all text-sm font-bold uppercase tracking-widest">
           <ChevronLeft size={18} /> Voltar
         </button>
@@ -456,22 +473,112 @@ export default function Simulados() {
 
         {/* Review answers */}
         <div className="space-y-4">
-          <h3 className="text-lg font-black text-white uppercase tracking-widest">Revisão das Questões</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-white uppercase tracking-widest">Revisão das Questões</h3>
+            <button
+              onClick={() => {
+                if (expandedResultQuestions.size === solveQuestions.length) {
+                  setExpandedResultQuestions(new Set());
+                } else {
+                  setExpandedResultQuestions(new Set(solveQuestions.map(q => q.id)));
+                }
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-[#3B82F6] hover:text-[#3B82F6]/80 transition-all">
+              {expandedResultQuestions.size === solveQuestions.length ? 'Recolher todas' : 'Expandir todas'}
+            </button>
+          </div>
           {solveQuestions.length > 0 ? solveQuestions.map((q, idx) => {
             const userAnswer = currentAttempt.answers?.[q.id];
             const isCorrect = userAnswer === q.correct_option_index;
+            const isExpanded = expandedResultQuestions.has(q.id);
+            const options = q.options || [];
             return (
-              <div key={q.id} className={cn("border rounded-2xl p-5 space-y-3",
+              <div key={q.id} className={cn("border rounded-2xl overflow-hidden transition-all",
                 isCorrect ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/20 bg-red-500/5")}>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Questão {idx + 1}</span>
-                  {isCorrect ? <CheckCircle2 size={16} className="text-emerald-400" /> : <XCircle size={16} className="text-red-400" />}
-                </div>
-                <p className="text-sm text-white/80 line-clamp-2">{q.text}</p>
-                <div className="text-xs text-white/50">
-                  Sua resposta: <span className={isCorrect ? "text-emerald-400" : "text-red-400"}>{userAnswer != null ? String.fromCharCode(65 + userAnswer) : 'Não respondida'}</span>
-                  {!isCorrect && <> • Correta: <span className="text-emerald-400">{String.fromCharCode(65 + q.correct_option_index)}</span></>}
-                </div>
+                {/* Collapsed header — always visible */}
+                <button onClick={() => toggleResultExpand(q.id)}
+                  className="w-full text-left p-5 flex items-center gap-3 hover:bg-white/[0.02] transition-all">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40 w-6">Q{idx + 1}</span>
+                    {isCorrect ? <CheckCircle2 size={16} className="text-emerald-400" /> : <XCircle size={16} className="text-red-400" />}
+                  </div>
+                  <p className="text-sm text-white/80 flex-1 line-clamp-1">{q.text}</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] text-white/30">
+                      {userAnswer != null ? String.fromCharCode(65 + userAnswer) : '—'}
+                      {!isCorrect && ` → ${String.fromCharCode(65 + q.correct_option_index)}`}
+                    </span>
+                    {q.video_url && <Video size={12} className="text-[#3B82F6]" />}
+                    <ChevronDown size={14} className={cn("text-white/30 transition-transform", isExpanded && "rotate-180")} />
+                  </div>
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="px-5 pb-5 space-y-4 border-t border-white/5 pt-4">
+                    {/* Full question text */}
+                    <div className="text-sm text-white/80 whitespace-pre-wrap">{q.text}</div>
+
+                    {/* Options */}
+                    <div className="space-y-2">
+                      {options.map((opt: string, optIdx: number) => {
+                        const isUserChoice = userAnswer === optIdx;
+                        const isCorrectOption = q.correct_option_index === optIdx;
+                        return (
+                          <div key={optIdx} className={cn(
+                            "flex items-start gap-3 p-3 rounded-xl border transition-all",
+                            isCorrectOption
+                              ? "border-emerald-500/30 bg-emerald-500/10"
+                              : isUserChoice
+                                ? "border-red-500/30 bg-red-500/10"
+                                : "border-white/5 bg-white/[0.02]"
+                          )}>
+                            <span className={cn("text-xs font-black w-6 h-6 rounded-lg flex items-center justify-center shrink-0",
+                              isCorrectOption ? "bg-emerald-500 text-white" : isUserChoice ? "bg-red-500 text-white" : "bg-white/10 text-white/40"
+                            )}>{String.fromCharCode(65 + optIdx)}</span>
+                            <span className="text-sm text-white/70 flex-1">{opt}</span>
+                            {isCorrectOption && <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />}
+                            {isUserChoice && !isCorrectOption && <XCircle size={14} className="text-red-400 shrink-0 mt-0.5" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Explanation */}
+                    {q.explanation && (
+                      <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 space-y-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#3B82F6]">Explicação</span>
+                        <div className="text-sm text-white/70 whitespace-pre-wrap">{q.explanation}</div>
+                      </div>
+                    )}
+
+                    {/* Video */}
+                    {q.video_url && (
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#3B82F6]">Resolução em Vídeo</span>
+                        {isYouTubeUrl(q.video_url) ? (
+                          <div className="aspect-video rounded-xl overflow-hidden">
+                            <iframe src={getYouTubeEmbedUrl(q.video_url) || ''} className="w-full h-full" allowFullScreen
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+                          </div>
+                        ) : (
+                          <a href={q.video_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-4 py-3 bg-[#3B82F6]/10 border border-[#3B82F6]/20 rounded-xl text-[#3B82F6] text-sm font-bold hover:bg-[#3B82F6]/20 transition-all">
+                            <Video size={16} /> Abrir Resolução em Vídeo
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Meta */}
+                    <div className="flex flex-wrap gap-2 text-[10px] text-white/30">
+                      {q.subject && <span className="bg-white/5 px-2 py-1 rounded">{q.subject}</span>}
+                      {q.topic && <span className="bg-white/5 px-2 py-1 rounded">{q.topic}</span>}
+                      {q.org && <span className="bg-white/5 px-2 py-1 rounded">{q.org}</span>}
+                      {q.year && <span className="bg-white/5 px-2 py-1 rounded">{q.year}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           }) : <p className="text-white/30 text-sm">Carregando questões para revisão...</p>}
