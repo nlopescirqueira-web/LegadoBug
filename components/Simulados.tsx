@@ -8,7 +8,7 @@ import {
   HelpCircle, Calendar, Clock, Play, Pause, ChevronLeft, ChevronRight, Trophy,
   Sparkles, AlertTriangle, BarChart3, Scissors, X, FileText, Users, Settings2,
   Trash2, Eye, EyeOff, Pencil, Video, BrainCircuit, GraduationCap, Target,
-  ListOrdered, Save, ArrowRight, RotateCcw, Building2
+  ListOrdered, Save, ArrowRight, RotateCcw, Building2, Medal, Crown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -95,6 +95,8 @@ export default function Simulados() {
   const [currentAttempt, setCurrentAttempt] = useState<SimuladoAttempt | null>(null);
   const [cutOptions, setCutOptions] = useState<Record<string, number[]>>({});
   const [attempts, setAttempts] = useState<SimuladoAttempt[]>([]);
+  const [simuladoRanking, setSimuladoRanking] = useState<{ user_id: string; name: string; photo_url: string | null; score: number; correct_answers: number; total_questions: number; finished_at: string }[]>([]);
+  const [loadingRanking, setLoadingRanking] = useState(false);
 
   // Timer effect
   useEffect(() => {
@@ -161,6 +163,47 @@ export default function Simulados() {
       setAllQuestions(data || []);
     } catch (err) {
       console.error('Error fetching questions:', err);
+    }
+  }, []);
+
+  const fetchSimuladoRanking = useCallback(async (simuladoId: string) => {
+    setLoadingRanking(true);
+    try {
+      const { data: allAttempts } = await supabase
+        .from('simulado_attempts')
+        .select('user_id, score, correct_answers, total_questions, finished_at')
+        .eq('simulado_id', simuladoId)
+        .not('finished_at', 'is', null)
+        .order('score', { ascending: false });
+
+      if (!allAttempts || allAttempts.length === 0) { setSimuladoRanking([]); return; }
+
+      const userIds = [...new Set(allAttempts.map(a => a.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name, photo_url')
+        .in('id', userIds);
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+      const ranked = allAttempts.map(a => {
+        const profile = profileMap.get(a.user_id);
+        return {
+          user_id: a.user_id,
+          name: profile?.name || 'Usuário',
+          photo_url: profile?.photo_url || null,
+          score: a.score || 0,
+          correct_answers: a.correct_answers || 0,
+          total_questions: a.total_questions || 0,
+          finished_at: a.finished_at!,
+        };
+      });
+      ranked.sort((a, b) => b.score - a.score || new Date(a.finished_at).getTime() - new Date(b.finished_at).getTime());
+      setSimuladoRanking(ranked);
+    } catch (err) {
+      console.error('Error fetching ranking:', err);
+      setSimuladoRanking([]);
+    } finally {
+      setLoadingRanking(false);
     }
   }, []);
 
@@ -254,6 +297,7 @@ export default function Simulados() {
       setCurrentAttempt(existingAttempt);
       setSolveAnswers(existingAttempt.answers || {});
       setSelectedSimulado(sim);
+      fetchSimuladoRanking(sim.id);
       setActiveView('result');
       return;
     }
@@ -315,6 +359,7 @@ export default function Simulados() {
 
     setCurrentAttempt(prev => prev ? { ...prev, score, correct_answers: correct, finished_at: new Date().toISOString(), answers: solveAnswers } : prev);
     await fetchAttempts();
+    if (selectedSimulado) fetchSimuladoRanking(selectedSimulado.id);
     setActiveView('result');
   };
 
@@ -469,6 +514,59 @@ export default function Simulados() {
             <div className={cn("h-full rounded-full transition-all", score >= 70 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500")}
               style={{ width: `${score}%` }} />
           </div>
+        </div>
+
+        {/* Ranking */}
+        <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <Trophy size={20} className="text-amber-400" />
+            <h3 className="text-lg font-black text-white uppercase tracking-widest">Ranking do Simulado</h3>
+          </div>
+          {loadingRanking ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-white/30" />
+            </div>
+          ) : simuladoRanking.length === 0 ? (
+            <p className="text-white/30 text-sm py-4">Nenhum participante ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {simuladoRanking.map((entry, idx) => {
+                const isCurrentUser = entry.user_id === user?.id;
+                const position = idx + 1;
+                return (
+                  <div key={entry.user_id} className={cn(
+                    "flex items-center gap-4 p-4 rounded-2xl border transition-all",
+                    isCurrentUser ? "bg-[#3B82F6]/10 border-[#3B82F6]/30" : "bg-white/[0.02] border-white/5"
+                  )}>
+                    <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                      {position === 1 ? <Crown size={24} className="text-amber-400" /> :
+                       position === 2 ? <Medal size={24} className="text-gray-300" /> :
+                       position === 3 ? <Medal size={24} className="text-amber-700" /> :
+                       <span className="text-lg font-black text-white/40">{position}º</span>}
+                    </div>
+                    <div className="relative w-10 h-10 rounded-full border border-white/10 overflow-hidden bg-white/5 flex items-center justify-center shrink-0">
+                      {entry.photo_url ? (
+                        <Image src={entry.photo_url} alt={entry.name} fill className="object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <span className="text-xs font-bold text-white/40">{entry.name?.charAt(0).toUpperCase() || '?'}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-sm font-bold truncate", isCurrentUser ? "text-[#3B82F6]" : "text-white")}>
+                        {entry.name} {isCurrentUser && <span className="text-[10px] text-white/40">(você)</span>}
+                      </p>
+                      <p className="text-[10px] text-white/40">{entry.correct_answers}/{entry.total_questions} acertos</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={cn("text-2xl font-black",
+                        entry.score >= 70 ? "text-emerald-400" : entry.score >= 50 ? "text-amber-400" : "text-red-400"
+                      )}>{entry.score}%</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Review answers */}
