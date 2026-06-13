@@ -81,6 +81,9 @@ export default function Simulados() {
   const [allQuestions, setAllQuestions] = useState<any[]>([]);
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerSubject, setPickerSubject] = useState('');
+  const [pickerOrg, setPickerOrg] = useState('');
+  const [pickerYear, setPickerYear] = useState('');
+  const [pickerVideo, setPickerVideo] = useState<'' | 'com' | 'sem'>('');
 
   // Solve state
   const [solveAnswers, setSolveAnswers] = useState<Record<string, number>>({});
@@ -381,14 +384,27 @@ export default function Simulados() {
       if (selectedIds.has(q.id)) return false;
       if (pickerSearch && !normalizeString(q.text).includes(normalizeString(pickerSearch)) &&
           !normalizeString(q.subject).includes(normalizeString(pickerSearch)) &&
-          !normalizeString(q.topic).includes(normalizeString(pickerSearch))) return false;
+          !normalizeString(q.topic).includes(normalizeString(pickerSearch)) &&
+          !normalizeString(q.org).includes(normalizeString(pickerSearch))) return false;
       if (pickerSubject && normalizeString(q.subject) !== normalizeString(pickerSubject)) return false;
+      if (pickerOrg && normalizeString(q.org) !== normalizeString(pickerOrg)) return false;
+      if (pickerYear && String(q.year) !== pickerYear) return false;
+      if (pickerVideo === 'com' && !q.video_url) return false;
+      if (pickerVideo === 'sem' && q.video_url) return false;
       return true;
     });
-  }, [allQuestions, editQuestions, pickerSearch, pickerSubject]);
+  }, [allQuestions, editQuestions, pickerSearch, pickerSubject, pickerOrg, pickerYear, pickerVideo]);
 
   const uniqueSubjects = useMemo(() => {
     return [...new Set(allQuestions.map(q => q.subject).filter(Boolean))].sort();
+  }, [allQuestions]);
+
+  const uniqueOrgs = useMemo(() => {
+    return [...new Set(allQuestions.map(q => q.org).filter(Boolean))].sort();
+  }, [allQuestions]);
+
+  const uniqueYears = useMemo(() => {
+    return [...new Set(allQuestions.map(q => q.year).filter(Boolean))].map(String).sort().reverse();
   }, [allQuestions]);
 
   // Subject groups in edit
@@ -672,11 +688,20 @@ export default function Simulados() {
         {/* Questions Section */}
         <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-              <ListOrdered size={18} className="text-[#3B82F6]" /> Questões ({editQuestions.length})
-            </h3>
+            <div>
+              <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                <ListOrdered size={18} className="text-[#3B82F6]" /> Questões ({editQuestions.length})
+              </h3>
+              {editQuestions.length > 0 && (
+                <p className="text-[10px] text-white/30 mt-1 flex items-center gap-2">
+                  <span className="text-emerald-400">{editQuestions.filter(eq => eq.question.video_url).length} com vídeo</span>
+                  <span>•</span>
+                  <span>{editQuestions.filter(eq => !eq.question.video_url).length} sem vídeo</span>
+                </p>
+              )}
+            </div>
             <div className="flex gap-2">
-              <button onClick={() => { setShowQuestionPicker(true); setPickerSearch(''); setPickerSubject(''); }}
+              <button onClick={() => { setShowQuestionPicker(true); setPickerSearch(''); setPickerSubject(''); setPickerOrg(''); setPickerYear(''); setPickerVideo(''); }}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6]/10 text-[#3B82F6] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#3B82F6]/20 transition-all border border-[#3B82F6]/20">
                 <Plus size={14} /> Buscar do Banco
               </button>
@@ -702,7 +727,14 @@ export default function Simulados() {
                     <div key={eq.question.id} className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-xl p-3 group">
                       <span className="text-[10px] font-black text-white/30 w-6 text-center">{globalIdx + 1}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-white/70 line-clamp-1">{eq.question.text}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-white/70 line-clamp-1 flex-1">{eq.question.text}</p>
+                          {eq.question.video_url ? (
+                            <span className="flex items-center gap-1 text-[8px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded shrink-0"><Video size={8} /></span>
+                          ) : (
+                            <span className="text-[8px] font-bold text-white/15 bg-white/5 px-1.5 py-0.5 rounded shrink-0">Ø</span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-white/30">{eq.question.subject} • {eq.question.topic || 'Sem assunto'}</p>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -748,16 +780,41 @@ export default function Simulados() {
                   <h3 className="text-sm font-black text-white uppercase tracking-widest">Buscar Questões do Banco</h3>
                   <button onClick={() => setShowQuestionPicker(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
                 </div>
-                <div className="p-4 flex gap-3">
+                <div className="p-4 space-y-3 border-b border-white/5">
                   <input type="text" value={pickerSearch} onChange={e => setPickerSearch(e.target.value)}
-                    placeholder="Buscar por texto, matéria ou assunto..."
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-[#3B82F6] transition-colors" />
-                  <select value={pickerSubject} onChange={e => setPickerSubject(e.target.value)}
-                    className="bg-[#1a1a1a] border border-white/10 rounded-xl py-2 px-4 text-sm text-white focus:outline-none appearance-none"
-                    style={{ colorScheme: 'dark' }}>
-                    <option value="" className="bg-[#1a1a1a] text-white">Todas as matérias</option>
-                    {uniqueSubjects.map(s => <option key={s} value={s} className="bg-[#1a1a1a] text-white">{s}</option>)}
-                  </select>
+                    placeholder="Buscar por texto, matéria, assunto ou órgão..."
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-[#3B82F6] transition-colors" />
+                  <div className="flex flex-wrap gap-2">
+                    <select value={pickerSubject} onChange={e => setPickerSubject(e.target.value)}
+                      className="bg-[#1a1a1a] border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
+                      style={{ colorScheme: 'dark' }}>
+                      <option value="" className="bg-[#1a1a1a] text-white">Todas matérias</option>
+                      {uniqueSubjects.map(s => <option key={s} value={s} className="bg-[#1a1a1a] text-white">{s}</option>)}
+                    </select>
+                    <select value={pickerOrg} onChange={e => setPickerOrg(e.target.value)}
+                      className="bg-[#1a1a1a] border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
+                      style={{ colorScheme: 'dark' }}>
+                      <option value="" className="bg-[#1a1a1a] text-white">Todos órgãos</option>
+                      {uniqueOrgs.map(s => <option key={s} value={s} className="bg-[#1a1a1a] text-white">{s}</option>)}
+                    </select>
+                    <select value={pickerYear} onChange={e => setPickerYear(e.target.value)}
+                      className="bg-[#1a1a1a] border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
+                      style={{ colorScheme: 'dark' }}>
+                      <option value="" className="bg-[#1a1a1a] text-white">Todos anos</option>
+                      {uniqueYears.map(y => <option key={y} value={y} className="bg-[#1a1a1a] text-white">{y}</option>)}
+                    </select>
+                    <select value={pickerVideo} onChange={e => setPickerVideo(e.target.value as '' | 'com' | 'sem')}
+                      className="bg-[#1a1a1a] border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none"
+                      style={{ colorScheme: 'dark' }}>
+                      <option value="" className="bg-[#1a1a1a] text-white">Vídeo: Todos</option>
+                      <option value="com" className="bg-[#1a1a1a] text-white">Com vídeo</option>
+                      <option value="sem" className="bg-[#1a1a1a] text-white">Sem vídeo</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-white/30 font-bold uppercase tracking-widest">
+                    <span>{pickerFiltered.length} questões encontradas</span>
+                    <span>{pickerFiltered.filter(q => q.video_url).length} com vídeo</span>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                   {pickerFiltered.slice(0, 50).map(q => (
@@ -768,9 +825,16 @@ export default function Simulados() {
                       className="w-full text-left p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:border-[#3B82F6]/30 transition-all group">
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-white/70 line-clamp-2 flex-1">{q.text}</p>
-                        <Plus size={16} className="text-white/20 group-hover:text-[#3B82F6] shrink-0 ml-3" />
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          {q.video_url ? (
+                            <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg"><Video size={10} /> Vídeo</span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-white/20 bg-white/5 px-2 py-0.5 rounded-lg">Sem vídeo</span>
+                          )}
+                          <Plus size={16} className="text-white/20 group-hover:text-[#3B82F6]" />
+                        </div>
                       </div>
-                      <p className="text-[10px] text-white/30 mt-1">{q.subject} • {q.topic || ''} • Ano: {q.year || '-'}</p>
+                      <p className="text-[10px] text-white/30 mt-1">{q.subject} • {q.topic || ''} • {q.org || ''} • Ano: {q.year || '-'}</p>
                     </button>
                   ))}
                   {pickerFiltered.length === 0 && (
