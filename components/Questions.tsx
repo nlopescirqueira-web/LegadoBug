@@ -709,12 +709,15 @@ export default function Questions() {
 
   const toggleCut = (qId: string, optIdx: number) => {
     if (answers[qId] !== undefined) return;
-    
+
     setCutOptions(prev => {
       const current = prev[qId] || [];
       if (current.includes(optIdx)) {
         return { ...prev, [qId]: current.filter(i => i !== optIdx) };
       } else {
+        const q = questions.find(qq => qq.id === qId);
+        const maxCuts = (q?.options?.length || 5) - 2;
+        if (current.length >= maxCuts) return prev;
         if (tempAnswers[qId] === optIdx) {
           setTempAnswers(prevTemp => {
             const next = { ...prevTemp };
@@ -724,6 +727,29 @@ export default function Questions() {
         }
         return { ...prev, [qId]: [...current, optIdx] };
       }
+    });
+  };
+
+  const resetAnswer = (qId: string) => {
+    setAnswers(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+    setTempAnswers(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+    setShowFeedback(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+    setCutOptions(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
     });
   };
 
@@ -1514,6 +1540,18 @@ export default function Questions() {
                         </button>
                       </motion.div>
                     )}
+
+                    {/* Change Answer Button */}
+                    {answers[q.id] !== undefined && (
+                      <div className="pt-4">
+                        <button
+                          onClick={() => resetAnswer(q.id)}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 hover:bg-white/5 text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <RotateCcw size={14} /> Trocar Resposta
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 border-t border-white/5 pt-4 flex-wrap">
@@ -2135,10 +2173,14 @@ export default function Questions() {
                               {isAnswered ? (isCorrect ? <Check size={14} /> : isSelected ? <XCircle size={14} /> : String.fromCharCode(65 + optIdx)) : String.fromCharCode(65 + optIdx)}
                             </span>
                             <span className="flex-1">{opt}</span>
-                            {!isAnswered && !isCut && (
+                            {!isAnswered && (
                               <button onClick={(e) => { e.stopPropagation(); toggleCut(q.id, optIdx); }}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-white/20 hover:text-red-400 transition-all" title="Eliminar alternativa">
-                                <Scissors size={14} />
+                                className={cn(
+                                  "p-1 transition-all",
+                                  isCut ? "opacity-100 text-[#3B82F6] hover:text-[#3B82F6]/80" : "opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400"
+                                )}
+                                title={isCut ? "Restaurar opção" : "Eliminar alternativa"}>
+                                {isCut ? <RotateCcw size={14} /> : <Scissors size={14} />}
                               </button>
                             )}
                           </button>
@@ -2152,6 +2194,17 @@ export default function Questions() {
                             Responder
                           </button>
                         </motion.div>
+                      )}
+
+                      {answers[q.id] !== undefined && (
+                        <div className="pt-4">
+                          <button
+                            onClick={() => resetAnswer(q.id)}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 hover:bg-white/5 text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            <RotateCcw size={14} /> Trocar Resposta
+                          </button>
+                        </div>
                       )}
                     </div>
 

@@ -471,7 +471,9 @@ export default function Simulados() {
     setCutOptions(prev => {
       const current = prev[qId] || [];
       if (current.includes(optIdx)) return { ...prev, [qId]: current.filter(i => i !== optIdx) };
-      if (solveAnswers[qId] === optIdx) return prev;
+      const q = solveQuestions.find(sq => sq.id === qId);
+      const maxCuts = (q?.options?.length || 5) - 2;
+      if (current.length >= maxCuts) return prev;
       return { ...prev, [qId]: [...current, optIdx] };
     });
   };
@@ -805,10 +807,14 @@ export default function Simulados() {
                     {isAnswered ? (isCorrect ? <Check size={14} /> : isSelected ? <XCircle size={14} /> : String.fromCharCode(65 + optIdx)) : String.fromCharCode(65 + optIdx)}
                   </span>
                   <span className="flex-1">{opt}</span>
-                  {!solveFinished && !isCut && (
+                  {!solveFinished && solveAnswers[currentQ.id] === undefined && (
                     <button onClick={(e) => { e.stopPropagation(); toggleCut(currentQ.id, optIdx); }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-white/20 hover:text-red-400 transition-all" title="Eliminar">
-                      <Scissors size={14} />
+                      className={cn(
+                        "p-1 transition-all",
+                        isCut ? "opacity-100 text-[#3B82F6] hover:text-[#3B82F6]/80" : "opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400"
+                      )}
+                      title={isCut ? "Restaurar opção" : "Eliminar"}>
+                      {isCut ? <RotateCcw size={14} /> : <Scissors size={14} />}
                     </button>
                   )}
                 </button>
