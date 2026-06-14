@@ -2427,11 +2427,11 @@ export default function Questions() {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-white/50">Alternativas</label>
                   {editForm.options.map((opt, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
+                    <div key={idx} className="flex items-start gap-3">
                       <button
                         onClick={() => setEditForm(prev => ({ ...prev, correct_option_index: idx }))}
                         className={cn(
-                          "w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border transition-all",
+                          "w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border transition-all mt-1",
                           editForm.correct_option_index === idx
                             ? "bg-emerald-500 border-emerald-500 text-white"
                             : "border-white/10 text-white/40 hover:border-emerald-500/50 hover:text-emerald-400"
@@ -2440,15 +2440,15 @@ export default function Questions() {
                       >
                         {String.fromCharCode(65 + idx)}
                       </button>
-                      <input
-                        type="text"
+                      <textarea
                         value={opt}
                         onChange={e => {
                           const newOpts = [...editForm.options];
                           newOpts[idx] = e.target.value;
                           setEditForm(prev => ({ ...prev, options: newOpts }));
                         }}
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all"
+                        rows={2}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all resize-none"
                       />
                     </div>
                   ))}
