@@ -786,38 +786,42 @@ export default function Simulados() {
               const isCorrect = optIdx === currentQ.correct_option_index;
 
               return (
-                <button key={optIdx}
-                  onClick={() => {
-                    if (isCut || solveFinished) return;
-                    setSolveAnswers(prev => ({ ...prev, [currentQ.id]: optIdx }));
-                  }}
-                  disabled={isCut || solveFinished}
-                  className={cn(
-                    "w-full text-left px-5 py-4 rounded-2xl border text-sm transition-all duration-300 flex items-center gap-4 group relative",
-                    isCut ? "opacity-20 line-through cursor-not-allowed border-white/5" :
-                    isAnswered ? (isCorrect ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : isSelected ? "bg-red-500/10 border-red-500/30 text-red-400" : "border-white/5 text-white/50") :
-                    isSelected ? "bg-[#3B82F6]/10 border-[#3B82F6]/40 text-[#3B82F6] shadow-[0_0_20px_-5px_#3B82F6]" :
-                    "border-white/5 text-white/80 hover:border-white/20 hover:bg-white/[0.03]"
-                  )}>
-                  <span className={cn("w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border transition-all",
-                    isCut ? "border-white/10 text-white/20" :
-                    isAnswered ? (isCorrect ? "border-emerald-500 bg-emerald-500 text-white" : isSelected ? "border-red-500 bg-red-500 text-white" : "border-white/10 text-white/30") :
-                    isSelected ? "border-[#3B82F6] bg-[#3B82F6] text-white" : "border-white/10 text-white/40"
-                  )}>
-                    {isAnswered ? (isCorrect ? <Check size={14} /> : isSelected ? <XCircle size={14} /> : String.fromCharCode(65 + optIdx)) : String.fromCharCode(65 + optIdx)}
-                  </span>
-                  <span className="flex-1">{opt}</span>
+                <div key={optIdx} className="flex items-center gap-2 group">
+                  <button
+                    onClick={() => {
+                      if (isCut || solveFinished) return;
+                      setSolveAnswers(prev => ({ ...prev, [currentQ.id]: optIdx }));
+                    }}
+                    disabled={isCut || solveFinished}
+                    className={cn(
+                      "flex-1 text-left px-5 py-4 rounded-2xl border text-sm transition-all duration-300 flex items-center gap-4 relative",
+                      isCut ? "opacity-20 line-through cursor-not-allowed border-white/5" :
+                      isAnswered ? (isCorrect ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : isSelected ? "bg-red-500/10 border-red-500/30 text-red-400" : "border-white/5 text-white/50") :
+                      isSelected ? "bg-[#3B82F6]/10 border-[#3B82F6]/40 text-[#3B82F6] shadow-[0_0_20px_-5px_#3B82F6]" :
+                      "border-white/5 text-white/80 hover:border-white/20 hover:bg-white/[0.03]"
+                    )}>
+                    <span className={cn("w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border transition-all",
+                      isCut ? "border-white/10 text-white/20" :
+                      isAnswered ? (isCorrect ? "border-emerald-500 bg-emerald-500 text-white" : isSelected ? "border-red-500 bg-red-500 text-white" : "border-white/10 text-white/30") :
+                      isSelected ? "border-[#3B82F6] bg-[#3B82F6] text-white" : "border-white/10 text-white/40"
+                    )}>
+                      {isAnswered ? (isCorrect ? <Check size={14} /> : isSelected ? <XCircle size={14} /> : String.fromCharCode(65 + optIdx)) : String.fromCharCode(65 + optIdx)}
+                    </span>
+                    <span className="flex-1">{opt}</span>
+                  </button>
                   {!solveFinished && solveAnswers[currentQ.id] === undefined && (
-                    <button onClick={(e) => { e.stopPropagation(); toggleCut(currentQ.id, optIdx); }}
+                    <button onClick={() => toggleCut(currentQ.id, optIdx)}
                       className={cn(
-                        "p-1 transition-all",
-                        isCut ? "opacity-100 text-[#3B82F6] hover:text-[#3B82F6]/80" : "opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400"
+                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-all",
+                        isCut
+                          ? "opacity-100 bg-[#3B82F6]/10 border-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/20"
+                          : "opacity-0 group-hover:opacity-100 border-white/10 text-white/30 hover:text-red-400 hover:border-red-500/20"
                       )}
                       title={isCut ? "Restaurar opção" : "Eliminar"}>
                       {isCut ? <RotateCcw size={14} /> : <Scissors size={14} />}
                     </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

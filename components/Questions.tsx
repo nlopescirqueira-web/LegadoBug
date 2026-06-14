@@ -378,6 +378,11 @@ export default function Questions() {
   const [showFeedback, setShowFeedback] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<Record<string, 'gabarito' | 'comentarios' | 'estatisticas' | 'video'>>({});
 
+  // Admin edit question state
+  const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ text: '', options: [] as string[], correct_option_index: 0, explanation: '', video_url: '', subject: '', topic: '', org: '', year: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
     try {
@@ -707,6 +712,49 @@ export default function Questions() {
     });
   };
 
+  const openEditQuestion = (q: any) => {
+    setEditingQuestion(q);
+    setEditForm({
+      text: q.text || '',
+      options: [...(q.options || [])],
+      correct_option_index: q.correct_option_index || 0,
+      explanation: q.explanation || '',
+      video_url: q.video_url || '',
+      subject: q.subject || '',
+      topic: q.topic || '',
+      org: q.org || '',
+      year: q.year || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingQuestion) return;
+    setSavingEdit(true);
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({
+          text: editForm.text,
+          options: editForm.options,
+          correct_option_index: editForm.correct_option_index,
+          explanation: editForm.explanation,
+          video_url: editForm.video_url || null,
+          subject: editForm.subject,
+          topic: editForm.topic,
+          org: editForm.org,
+          year: editForm.year,
+        })
+        .eq('id', editingQuestion.id);
+      if (error) throw error;
+      setQuestions(prev => prev.map(q => q.id === editingQuestion.id ? { ...q, ...editForm } : q));
+      setEditingQuestion(null);
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const toggleCut = (qId: string, optIdx: number) => {
     if (answers[qId] !== undefined) return;
 
@@ -730,28 +778,6 @@ export default function Questions() {
     });
   };
 
-  const resetAnswer = (qId: string) => {
-    setAnswers(prev => {
-      const next = { ...prev };
-      delete next[qId];
-      return next;
-    });
-    setTempAnswers(prev => {
-      const next = { ...prev };
-      delete next[qId];
-      return next;
-    });
-    setShowFeedback(prev => {
-      const next = { ...prev };
-      delete next[qId];
-      return next;
-    });
-    setCutOptions(prev => {
-      const next = { ...prev };
-      delete next[qId];
-      return next;
-    });
-  };
 
   // Notebook solving mode: get questions for the active notebook
   const activeNotebook = activeNotebookId ? notebooks.find(n => n.id === activeNotebookId) : null;
@@ -1412,18 +1438,26 @@ export default function Questions() {
 
                     <div className="flex items-center gap-3 shrink-0 ml-auto pt-2 sm:pt-0">
                       {isAdmin && (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteQuestion(q.id);
-                          }}
-                          className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl transition-all font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/10"
-                          title="Excluir Questão permanentemente"
-                        >
-                          <Trash2 size={14} />
-                          <span>Excluir</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEditQuestion(q); }}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6] text-[#3B82F6] hover:text-white border border-[#3B82F6]/20 rounded-xl transition-all font-black uppercase tracking-widest text-[10px]"
+                            title="Editar questão"
+                          >
+                            <Pencil size={14} /> Editar
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteQuestion(q.id);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl transition-all font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/10"
+                            title="Excluir Questão permanentemente"
+                          >
+                            <Trash2 size={14} /> Excluir
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1541,17 +1575,6 @@ export default function Questions() {
                       </motion.div>
                     )}
 
-                    {/* Change Answer Button */}
-                    {answers[q.id] !== undefined && (
-                      <div className="pt-4">
-                        <button
-                          onClick={() => resetAnswer(q.id)}
-                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 hover:bg-white/5 text-[10px] font-black uppercase tracking-widest transition-all"
-                        >
-                          <RotateCcw size={14} /> Trocar Resposta
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-1 border-t border-white/5 pt-4 flex-wrap">
@@ -2196,16 +2219,6 @@ export default function Questions() {
                         </motion.div>
                       )}
 
-                      {answers[q.id] !== undefined && (
-                        <div className="pt-4">
-                          <button
-                            onClick={() => resetAnswer(q.id)}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 hover:bg-white/5 text-[10px] font-black uppercase tracking-widest transition-all"
-                          >
-                            <RotateCcw size={14} /> Trocar Resposta
-                          </button>
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-1 border-t border-white/5 pt-4 flex-wrap">
@@ -2372,12 +2385,142 @@ export default function Questions() {
       {/* Admin Modal */}
       <AnimatePresence>
         {showAdmin && (
-          <AdminQuestions 
+          <AdminQuestions
             onClose={() => {
               setShowAdmin(false);
               fetchQuestions();
-            }} 
+            }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Admin Edit Question Modal */}
+      <AnimatePresence>
+        {editingQuestion && isAdmin && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0A0A0A] border border-white/10 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl"
+            >
+              <div className="p-6 border-b border-white/10 flex items-center justify-between shrink-0">
+                <div>
+                  <h2 className="text-lg font-black uppercase tracking-tighter text-white">Editar Questão</h2>
+                  <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Altere as alternativas, gabarito ou enunciado</p>
+                </div>
+                <button onClick={() => setEditingQuestion(null)} className="p-2 text-white/40 hover:text-white transition-all"><X size={20} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                {/* Enunciado */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/50">Enunciado</label>
+                  <textarea
+                    value={editForm.text}
+                    onChange={e => setEditForm(prev => ({ ...prev, text: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#3B82F6]/50 resize-none min-h-[100px] transition-all"
+                  />
+                </div>
+
+                {/* Alternativas */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/50">Alternativas</label>
+                  {editForm.options.map((opt, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <button
+                        onClick={() => setEditForm(prev => ({ ...prev, correct_option_index: idx }))}
+                        className={cn(
+                          "w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border transition-all",
+                          editForm.correct_option_index === idx
+                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            : "border-white/10 text-white/40 hover:border-emerald-500/50 hover:text-emerald-400"
+                        )}
+                        title={editForm.correct_option_index === idx ? "Resposta correta" : "Definir como correta"}
+                      >
+                        {String.fromCharCode(65 + idx)}
+                      </button>
+                      <input
+                        type="text"
+                        value={opt}
+                        onChange={e => {
+                          const newOpts = [...editForm.options];
+                          newOpts[idx] = e.target.value;
+                          setEditForm(prev => ({ ...prev, options: newOpts }));
+                        }}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all"
+                      />
+                    </div>
+                  ))}
+                  <p className="text-[9px] text-emerald-400/60 font-bold uppercase tracking-widest">
+                    Clique na letra para definir a resposta correta (atual: {String.fromCharCode(65 + editForm.correct_option_index)})
+                  </p>
+                </div>
+
+                {/* Explicação */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/50">Explicação</label>
+                  <textarea
+                    value={editForm.explanation}
+                    onChange={e => setEditForm(prev => ({ ...prev, explanation: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#3B82F6]/50 resize-none min-h-[80px] transition-all"
+                    placeholder="Explicação da resposta..."
+                  />
+                </div>
+
+                {/* Video URL */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/50">URL do Vídeo</label>
+                  <input
+                    type="text"
+                    value={editForm.video_url}
+                    onChange={e => setEditForm(prev => ({ ...prev, video_url: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#3B82F6]/50 transition-all"
+                    placeholder="https://youtube.com/..."
+                  />
+                </div>
+
+                {/* Meta: Subject, Topic, Org, Year */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Disciplina</label>
+                    <input type="text" value={editForm.subject}
+                      onChange={e => setEditForm(prev => ({ ...prev, subject: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Assunto</label>
+                    <input type="text" value={editForm.topic}
+                      onChange={e => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Órgão</label>
+                    <input type="text" value={editForm.org}
+                      onChange={e => setEditForm(prev => ({ ...prev, org: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Ano</label>
+                    <input type="text" value={editForm.year}
+                      onChange={e => setEditForm(prev => ({ ...prev, year: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#3B82F6]/50 transition-all" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-white/5 flex gap-3 shrink-0">
+                <button onClick={() => setEditingQuestion(null)}
+                  className="flex-1 py-3 bg-white/5 text-white/60 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+                  Cancelar
+                </button>
+                <button onClick={handleSaveEdit} disabled={savingEdit}
+                  className="flex-1 py-3 bg-[#3B82F6] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#3B82F6]/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                  {savingEdit ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : 'Salvar Alterações'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
