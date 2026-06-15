@@ -337,14 +337,21 @@ export default function Simulados() {
     setSolveRunning(false);
     setSolveFinished(true);
 
+    const totalQ = solveQuestions.length;
     let correct = 0;
+    let answered = 0;
+
     solveQuestions.forEach(q => {
-      if (solveAnswers[q.id] === q.correct_option_index) correct++;
-      const isCorrect = solveAnswers[q.id] === q.correct_option_index;
-      recordQuestionAnswer(q.id, isCorrect, q.subject, q.topic, solveAnswers[q.id]);
+      const userAnswer = solveAnswers[q.id];
+      if (userAnswer !== undefined && userAnswer !== null) {
+        answered++;
+        const isCorrect = userAnswer === q.correct_option_index;
+        if (isCorrect) correct++;
+        recordQuestionAnswer(q.id, isCorrect, q.subject, q.topic, userAnswer);
+      }
     });
 
-    const score = solveQuestions.length > 0 ? Math.round((correct / solveQuestions.length) * 100) : 0;
+    const score = totalQ > 0 ? Math.round((correct / totalQ) * 100) : 0;
 
     if (currentAttempt) {
       await supabase
@@ -354,11 +361,12 @@ export default function Simulados() {
           finished_at: new Date().toISOString(),
           score,
           correct_answers: correct,
+          total_questions: totalQ,
         })
         .eq('id', currentAttempt.id);
     }
 
-    setCurrentAttempt(prev => prev ? { ...prev, score, correct_answers: correct, finished_at: new Date().toISOString(), answers: solveAnswers } : prev);
+    setCurrentAttempt(prev => prev ? { ...prev, score, correct_answers: correct, total_questions: totalQ, finished_at: new Date().toISOString(), answers: solveAnswers } : prev);
     await fetchAttempts();
     if (selectedSimulado) fetchSimuladoRanking(selectedSimulado.id);
     setActiveView('result');
@@ -501,6 +509,9 @@ export default function Simulados() {
     const totalQ = currentAttempt.total_questions;
     const correctQ = currentAttempt.correct_answers;
     const score = currentAttempt.score || 0;
+    const answeredQ = Object.keys(currentAttempt.answers || {}).length;
+    const wrongQ = answeredQ - correctQ;
+    const unansweredQ = totalQ - answeredQ;
     return (
       <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
         <button onClick={() => { setActiveView('list'); setSelectedSimulado(null); setExpandedResultQuestions(new Set()); }}
@@ -516,6 +527,22 @@ export default function Simulados() {
           <div className="w-full max-w-md mx-auto h-4 bg-white/5 rounded-full overflow-hidden">
             <div className={cn("h-full rounded-full transition-all", score >= 70 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500")}
               style={{ width: `${score}%` }} />
+          </div>
+          <div className="flex items-center justify-center gap-6 pt-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <span className="text-sm font-bold text-emerald-400">{correctQ} acertos</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <XCircle size={16} className="text-red-400" />
+              <span className="text-sm font-bold text-red-400">{wrongQ} erros</span>
+            </div>
+            {unansweredQ > 0 && (
+              <div className="flex items-center gap-2">
+                <HelpCircle size={16} className="text-white/30" />
+                <span className="text-sm font-bold text-white/30">{unansweredQ} em branco</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -590,24 +617,30 @@ export default function Simulados() {
           </div>
           {solveQuestions.length > 0 ? solveQuestions.map((q, idx) => {
             const userAnswer = currentAttempt.answers?.[q.id];
-            const isCorrect = userAnswer === q.correct_option_index;
+            const wasAnswered = userAnswer !== undefined && userAnswer !== null;
+            const isCorrect = wasAnswered && userAnswer === q.correct_option_index;
+            const isWrong = wasAnswered && userAnswer !== q.correct_option_index;
             const isExpanded = expandedResultQuestions.has(q.id);
             const options = q.options || [];
             return (
               <div key={q.id} className={cn("border rounded-2xl overflow-hidden transition-all",
-                isCorrect ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/20 bg-red-500/5")}>
+                isCorrect ? "border-emerald-500/20 bg-emerald-500/5" :
+                isWrong ? "border-red-500/20 bg-red-500/5" :
+                "border-white/10 bg-white/[0.02]")}>
                 {/* Collapsed header — always visible */}
                 <button onClick={() => toggleResultExpand(q.id)}
                   className="w-full text-left p-5 flex items-center gap-3 hover:bg-white/[0.02] transition-all">
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white/40 w-6">Q{idx + 1}</span>
-                    {isCorrect ? <CheckCircle2 size={16} className="text-emerald-400" /> : <XCircle size={16} className="text-red-400" />}
+                    {isCorrect ? <CheckCircle2 size={16} className="text-emerald-400" /> :
+                     isWrong ? <XCircle size={16} className="text-red-400" /> :
+                     <HelpCircle size={16} className="text-white/30" />}
                   </div>
                   <p className="text-sm text-white/80 flex-1 line-clamp-1">{q.text}</p>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] text-white/30">
-                      {userAnswer != null ? String.fromCharCode(65 + userAnswer) : '—'}
-                      {!isCorrect && ` → ${String.fromCharCode(65 + q.correct_option_index)}`}
+                      {wasAnswered ? String.fromCharCode(65 + userAnswer) : 'Branco'}
+                      {isWrong && ` → ${String.fromCharCode(65 + q.correct_option_index)}`}
                     </span>
                     {q.video_url && <Video size={12} className="text-[#3B82F6]" />}
                     <ChevronDown size={14} className={cn("text-white/30 transition-transform", isExpanded && "rotate-180")} />
