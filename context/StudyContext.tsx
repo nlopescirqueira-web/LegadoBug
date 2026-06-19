@@ -346,6 +346,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   });
 
   // Derived counters — recomputed every second by the heartbeat
+  const [sessionBaseStats, setSessionBaseStats] = useState({ today: 0, weekly: 0, total: 0 });
   const [stopwatchSessionSeconds, setStopwatchSessionSeconds] = useState(0);
   const [stopwatchAccumulated, setStopwatchAccumulated] = useState(0);
   const [stopwatchTime, setStopwatchTime] = useState(0);
@@ -434,43 +435,47 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }, [allProfiles]);
 
   const currentSessionSeconds = useMemo(() => {
-    return stopwatchAccumulated;
-  }, [stopwatchAccumulated]);
+    return stopwatchActive ? stopwatchSessionSeconds : 0;
+  }, [stopwatchActive, stopwatchSessionSeconds]);
 
   const allTimeSeconds = useMemo(() => {
+    if (stopwatchActive) {
+      return sessionBaseStats.total + stopwatchSessionSeconds;
+    }
     const profileTotal = profileMap[user?.id || '']?.total_seconds || 0;
-    // Prioritize DB time over local subjectsData calculation to avoid "Pedro" bug
-    const baseTotal = Math.max(profileTotal, dbStats.total);
-    return baseTotal + currentSessionSeconds;
-  }, [profileMap, user, currentSessionSeconds, dbStats.total]);
+    return Math.max(profileTotal, dbStats.total);
+  }, [stopwatchActive, sessionBaseStats.total, stopwatchSessionSeconds, profileMap, user, dbStats.total]);
 
   const todayTotalSeconds = useMemo(() => {
+    if (stopwatchActive) {
+      return sessionBaseStats.today + stopwatchSessionSeconds;
+    }
     const localTotal = dailySubjectsData.reduce((acc, curr) => acc + curr.seconds, 0);
-    const dbTotal = dbStats.today;
-    const baseTotal = Math.max(localTotal, dbTotal);
-    return baseTotal + currentSessionSeconds;
-  }, [dailySubjectsData, dbStats.today, currentSessionSeconds]);
+    return Math.max(localTotal, dbStats.today);
+  }, [stopwatchActive, sessionBaseStats.today, stopwatchSessionSeconds, dailySubjectsData, dbStats.today]);
 
   const weeklyTotalSeconds = useMemo(() => {
+    if (stopwatchActive) {
+      return sessionBaseStats.weekly + stopwatchSessionSeconds;
+    }
     const localWeeklyBase = Math.round(weeklyData.reduce((acc, curr) => acc + curr.value, 0) * 3600);
-    const dbWeekly = dbStats.weekly;
-    const baseTotal = Math.max(localWeeklyBase, dbWeekly);
-    return baseTotal + currentSessionSeconds;
-  }, [weeklyData, currentSessionSeconds, dbStats.weekly]);
+    return Math.max(localWeeklyBase, dbStats.weekly);
+  }, [stopwatchActive, sessionBaseStats.weekly, stopwatchSessionSeconds, weeklyData, dbStats.weekly]);
 
   const liveWeeklyData = useMemo(() => {
     const now = new Date();
     const brDate = getBrasiliaDate(now);
     const dayOfWeek = brDate.getDay();
     const todayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    
+    const sessionSecs = stopwatchActive ? stopwatchSessionSeconds : 0;
+
     return weeklyData.map((day, index) => {
       if (index === todayIndex) {
-        return { ...day, value: day.value + (currentSessionSeconds / 3600) };
+        return { ...day, value: day.value + (sessionSecs / 3600) };
       }
       return day;
     });
-  }, [weeklyData, currentSessionSeconds]);
+  }, [weeklyData, stopwatchActive, stopwatchSessionSeconds]);
 
   const totalHours = useMemo(() => allTimeSeconds / 3600, [allTimeSeconds]);
   const weeklyTotalHours = useMemo(() => weeklyTotalSeconds / 3600, [weeklyTotalSeconds]);
@@ -732,13 +737,17 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       if (prev === newSubject) return prev;
 
       // When changing subject, sync un-synced time to the OLD subject
-      if (stopwatchActiveRef.current) {
+      if (stopwatchActiveRef.current && user) {
         const syncAnchor = lastSyncAtRef.current;
         const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
         if (unsyncedSecs >= 1) {
           console.log(`[StudyContext] Changing subject from ${prev} to ${newSubject}. Syncing ${unsyncedSecs}s to ${prev}.`);
-          addStudyTime(unsyncedSecs, prev);
-          syncStudyTimeToDb(unsyncedSecs, prev, true);
+          supabase.from('study_sessions').insert([{
+            user_id: user.id,
+            subject: prev || 'Geral',
+            duration_minutes: Math.ceil(unsyncedSecs / 60),
+            duration_seconds: Math.floor(unsyncedSecs)
+          }]);
           const now = Date.now();
           setLastSyncAt(now);
           lastSyncAtRef.current = now;
@@ -754,7 +763,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
       return newSubject;
     });
-  }, [addStudyTime, syncStudyTimeToDb, user]);
+  }, [user]);
 
   const getRank = useCallback((seconds: number) => {
     const hours = seconds / 3600;
@@ -926,7 +935,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const now = Date.now();
 
     if (!stopwatchActive) {
-      // START
+      // START — capture current totals as the session base
+      const profileTotal = profileMap[user.id]?.total_seconds || 0;
+      const baseToday = Math.max(dailySubjectsData.reduce((a, c) => a + c.seconds, 0), dbStats.today);
+      const baseWeekly = Math.max(Math.round(weeklyData.reduce((a, c) => a + c.value, 0) * 3600), dbStats.weekly);
+      const baseTotal = Math.max(profileTotal, dbStats.total);
+
+      setSessionBaseStats({ today: baseToday, weekly: baseWeekly, total: baseTotal });
+      setActiveSessionInitialSeconds(baseToday);
       setSessionStartedAt(now);
       sessionStartedAtRef.current = now;
       setLastSyncAt(now);
@@ -939,28 +955,33 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('sessionStartedAt', now.toString());
       localStorage.setItem('lastSyncAt', now.toString());
 
-      const currentTodayBase = todayTotalSeconds;
-      setActiveSessionInitialSeconds(currentTodayBase);
       updateStreak();
 
       supabase.rpc('start_study_session', {
         p_user_id: user.id,
         p_subject: activeSubject,
-        p_initial_seconds: currentTodayBase
+        p_initial_seconds: baseToday
       }).then(({ error }) => {
         if (error) console.error('[StudyContext] Error starting durable session:', error);
       });
     } else {
-      // STOP — sync only the un-synced tail (periodic syncs already handled the rest)
+      // STOP — sync unsynced tail to DB, then clear session
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((now - syncAnchor) / 1000);
 
-      if (unsyncedSecs >= 1) {
-        addStudyTime(unsyncedSecs, activeSubject);
-        syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
+      // Insert any remaining unsynced time as a session row
+      if (unsyncedSecs >= 1 && user) {
+        supabase.from('study_sessions').insert([{
+          user_id: user.id,
+          subject: activeSubject || 'Geral',
+          duration_minutes: Math.ceil(unsyncedSecs / 60),
+          duration_seconds: Math.floor(unsyncedSecs)
+        }]).then(({ error }) => {
+          if (error) console.error('[StudyContext] Error syncing tail:', error);
+        });
       }
 
-      // Clear active session in DB (end_study_session just clears state, no row insertion)
+      // Clear active session in DB
       supabase.rpc('end_study_session', {
         p_user_id: user.id
       }).then(({ error }) => {
@@ -968,32 +989,39 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         fetchRanking(true);
       });
 
+      if (!hasIncrementedStreakTodayRef.current) {
+        updateStreak();
+      }
+
       setStopwatchActive(false);
       setSessionStartedAt(null);
       sessionStartedAtRef.current = null;
       setStopwatchAccumulated(0);
       setStopwatchSessionSeconds(0);
       setActiveSessionInitialSeconds(0);
+      setSessionBaseStats({ today: 0, weekly: 0, total: 0 });
 
       localStorage.setItem('stopwatchActive', 'false');
       localStorage.removeItem('sessionStartedAt');
     }
-  }, [user, stopwatchActive, activeSubject, syncStudyTimeToDb, addStudyTime, updateStreak, todayTotalSeconds, fetchRanking]);
+  }, [user, stopwatchActive, activeSubject, updateStreak, fetchRanking, dailySubjectsData, dbStats, weeklyData, profileMap]);
 
   const resetStopwatch = useCallback(() => {
-    if (stopwatchActive) {
+    if (stopwatchActive && user) {
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
       if (unsyncedSecs >= 1) {
-        addStudyTime(unsyncedSecs, activeSubject);
-        syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
+        supabase.from('study_sessions').insert([{
+          user_id: user.id,
+          subject: activeSubject || 'Geral',
+          duration_minutes: Math.ceil(unsyncedSecs / 60),
+          duration_seconds: Math.floor(unsyncedSecs)
+        }]);
       }
-      if (user) {
-        supabase.rpc('end_study_session', { p_user_id: user.id }).then(({ error }) => {
-          if (error) console.error('[StudyContext] Error ending session on reset:', error);
-          fetchRanking(true);
-        });
-      }
+      supabase.rpc('end_study_session', { p_user_id: user.id }).then(({ error }) => {
+        if (error) console.error('[StudyContext] Error ending session on reset:', error);
+        fetchRanking(true);
+      });
     }
     setStopwatchActive(false);
     setSessionStartedAt(null);
@@ -1001,11 +1029,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     setStopwatchTime(0);
     setStopwatchAccumulated(0);
     setStopwatchSessionSeconds(0);
+    setSessionBaseStats({ today: 0, weekly: 0, total: 0 });
 
     localStorage.setItem('stopwatchActive', 'false');
     localStorage.removeItem('sessionStartedAt');
     localStorage.removeItem('lastSyncAt');
-  }, [stopwatchActive, activeSubject, syncStudyTimeToDb, addStudyTime, user, fetchRanking]);
+  }, [stopwatchActive, activeSubject, user, fetchRanking]);
 
   const currentSessionSecondsRef = React.useRef(0);
   const todayTotalSecondsRef = React.useRef(0);
@@ -1068,8 +1097,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (type === 'diario') {
           liveSeconds = todayTotalSeconds;
         } else if (type === 'semanal') {
-          const localWeeklyBase = Math.round(weeklyData.reduce((acc, curr) => acc + curr.value, 0) * 3600);
-          liveSeconds = Math.max(entry.seconds, localWeeklyBase + currentSessionSeconds);
+          liveSeconds = weeklyTotalSeconds;
         } else {
           liveSeconds = allTimeSeconds;
         }
@@ -1109,7 +1137,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       if (b.seconds !== a.seconds) return b.seconds - a.seconds;
       return a.name.localeCompare(b.name); 
     });
-  }, [rankingData, user, weeklyData, todayTotalSeconds, onlineUserIds, profileMap, presenceMetadata, allTimeSeconds, currentSessionSeconds, totalStudyTime]);
+  }, [rankingData, user, todayTotalSeconds, weeklyTotalSeconds, onlineUserIds, profileMap, presenceMetadata, allTimeSeconds, totalStudyTime]);
 
   const addSubject = useCallback(async (name: string) => {
     if (!user) return;
@@ -1178,18 +1206,26 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(heartbeat);
   }, []);
 
-  // Periodic sync to DB (every 60 seconds)
+  // Periodic sync to DB (every 60 seconds) — just inserts session rows for crash recovery
   useEffect(() => {
     const periodicSync = setInterval(() => {
-      if (!stopwatchActiveRef.current) return;
+      if (!stopwatchActiveRef.current || !user) return;
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
       if (unsyncedSecs < 5) return;
 
       const sub = activeSubjectRef.current;
       console.log(`[StudyContext] Periodic sync: ${unsyncedSecs}s to ${sub}`);
-      addStudyTime(unsyncedSecs, sub);
-      syncStudyTimeToDb(unsyncedSecs, sub, true);
+
+      supabase.from('study_sessions').insert([{
+        user_id: user.id,
+        subject: sub || 'Geral',
+        duration_minutes: Math.ceil(unsyncedSecs / 60),
+        duration_seconds: Math.floor(unsyncedSecs)
+      }]).then(({ error }) => {
+        if (error) console.error('[StudyContext] Periodic sync error:', error);
+        else if (!hasIncrementedStreakTodayRef.current) updateStreak();
+      });
 
       const now = Date.now();
       setLastSyncAt(now);
@@ -1198,19 +1234,23 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }, 60000);
 
     return () => clearInterval(periodicSync);
-  }, [syncStudyTimeToDb, addStudyTime]);
+  }, [user, updateStreak]);
 
   // Sync to DB on page unload or visibility change
   useEffect(() => {
     const syncUnsaved = () => {
-      if (!stopwatchActiveRef.current) return;
+      if (!stopwatchActiveRef.current || !user) return;
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
       if (unsyncedSecs < 1) return;
 
       console.log(`[StudyContext] Visibility/unload sync: ${unsyncedSecs}s`);
-      addStudyTime(unsyncedSecs, activeSubjectRef.current);
-      syncStudyTimeToDb(unsyncedSecs, activeSubjectRef.current, true);
+      supabase.from('study_sessions').insert([{
+        user_id: user.id,
+        subject: activeSubjectRef.current || 'Geral',
+        duration_minutes: Math.ceil(unsyncedSecs / 60),
+        duration_seconds: Math.floor(unsyncedSecs)
+      }]);
 
       const now = Date.now();
       setLastSyncAt(now);
@@ -1230,7 +1270,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [syncStudyTimeToDb, addStudyTime]);
+  }, [user]);
 
   // Global Data Fetching (Ranking & Profiles)
   useEffect(() => {
@@ -1356,6 +1396,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             const startTime = new Date(profile.active_session_start).getTime();
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
             const initial = profile.active_session_initial_seconds || 0;
+            const profileTotalSecs = profile.total_seconds || 0;
 
             console.log(`[StudyContext] Recovering STOPWATCH from SQL: ${elapsed}s elapsed, initial: ${initial}s`);
             setSessionStartedAt(startTime);
@@ -1365,6 +1406,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             setStopwatchSessionSeconds(elapsed);
             setStopwatchAccumulated(0);
             setActiveSessionInitialSeconds(initial);
+            setSessionBaseStats({
+              today: initial,
+              weekly: dbStats.weekly || 0,
+              total: profileTotalSecs
+            });
             setStopwatchActive(true);
 
             localStorage.setItem('stopwatchActive', 'true');
@@ -1662,14 +1708,18 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const performMidnightReset = (isStudyingNow: boolean) => {
       console.log('Midnight detected! Resetting daily timers...');
 
-      if (isStudyingNow) {
+      if (isStudyingNow && user) {
         // Sync un-synced time to the previous day
         const syncAnchor = lastSyncAtRef.current;
         const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
         if (unsyncedSecs >= 1) {
           console.log(`[StudyContext] Midnight transition while studying! Syncing ${unsyncedSecs}s to previous day.`);
-          addStudyTime(unsyncedSecs, activeSubjectRef.current);
-          syncStudyTimeToDb(unsyncedSecs, activeSubjectRef.current, true);
+          supabase.from('study_sessions').insert([{
+            user_id: user.id,
+            subject: activeSubjectRef.current || 'Geral',
+            duration_minutes: Math.ceil(unsyncedSecs / 60),
+            duration_seconds: Math.floor(unsyncedSecs)
+          }]);
         }
         // Reset sync anchor to now for the new day
         const now = Date.now();

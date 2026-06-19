@@ -40,8 +40,8 @@ export default function Timer() {
   const subjectTotalSeconds = useMemo(() => {
     const sub = dailySubjectsData.find(s => s.name === activeSubject);
     const base = sub ? sub.seconds : 0;
-    return base + stopwatchAccumulated;
-  }, [dailySubjectsData, activeSubject, stopwatchAccumulated]);
+    return base + (stopwatchActive ? stopwatchSessionSeconds : 0);
+  }, [dailySubjectsData, activeSubject, stopwatchActive, stopwatchSessionSeconds]);
 
   const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();
