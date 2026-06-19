@@ -857,7 +857,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           question_id: questionId,
           user_id: user.id,
           option_index: optionIndex,
-          is_correct: isCorrect
+          is_correct: isCorrect,
+          subject: subject || null,
+          topic: topic || null
         }]);
         
         if (error) {
@@ -1350,20 +1352,22 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             .single(),
           supabase
             .from('question_responses')
-            .select('question_id, is_correct, created_at')
+            .select('question_id, is_correct, created_at, subject, topic')
             .eq('user_id', user.id)
+            .order('created_at', { ascending: true })
         ]);
         
         const { data: sessions, error } = sessionsResult;
         const { data: profile } = profileResult;
         const { data: responses } = responsesResult;
 
-        // Populate question answers from DB
         if (responses) {
           const dbAnswers: QuestionAnswer[] = responses.map(r => ({
             questionId: r.question_id,
             isCorrect: r.is_correct,
             timestamp: r.created_at,
+            subject: r.subject || undefined,
+            topic: r.topic || undefined,
           }));
           setQuestionAnswers(dbAnswers);
           localStorage.setItem('questionAnswers', JSON.stringify(dbAnswers));

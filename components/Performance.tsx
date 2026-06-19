@@ -71,7 +71,7 @@ export default function Performance() {
   const filteredData = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     const getStartDate = () => {
       switch (selectedPeriod) {
         case 'hoje': return today;
@@ -81,7 +81,7 @@ export default function Performance() {
         case 'tres_meses': return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
         case 'seis_meses': return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
         case 'um_ano': return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-        default: return new Date(0); // All time for now
+        default: return new Date(0);
       }
     };
 
@@ -90,29 +90,25 @@ export default function Performance() {
       .filter(a => new Date(a.timestamp) >= startDate)
       .map(a => ({
         ...a,
-        subject: a.subject || allQuestionsMap[a.questionId]?.subject || 'Geral',
-        topic: a.topic || allQuestionsMap[a.questionId]?.topic || 'Geral'
+        subject: a.subject || allQuestionsMap[a.questionId]?.subject || 'Sem Disciplina',
+        topic: a.topic || allQuestionsMap[a.questionId]?.topic || 'Sem Assunto'
       }));
   }, [questionAnswers, selectedPeriod, allQuestionsMap]);
 
   const chartData = useMemo(() => {
     const dataMap: Record<string, { date: string; acertos: number; erros: number }> = {};
-    
-    // Fill with last 30 days if 'um_mes'
-    if (selectedPeriod === 'um_mes') {
-      for (let i = 30; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-        dataMap[dateStr] = { date: dateStr, acertos: 0, erros: 0 };
-      }
-    } else if (selectedPeriod === '7dias') {
-      for (let i = 7; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-        dataMap[dateStr] = { date: dateStr, acertos: 0, erros: 0 };
-      }
+
+    const periodDays: Record<string, number> = {
+      'hoje': 1, '7dias': 7, '15dias': 15, 'um_mes': 30,
+      'tres_meses': 90, 'seis_meses': 180, 'um_ano': 365, 'personalizado': 365
+    };
+    const days = periodDays[selectedPeriod] || 30;
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      dataMap[dateStr] = { date: dateStr, acertos: 0, erros: 0 };
     }
 
     filteredData.forEach(a => {
@@ -124,7 +120,11 @@ export default function Performance() {
       else dataMap[dateStr].erros++;
     });
 
-    return Object.values(dataMap);
+    const allValues = Object.values(dataMap);
+    if (days > 30) {
+      return allValues.filter(d => d.acertos > 0 || d.erros > 0);
+    }
+    return allValues;
   }, [filteredData, selectedPeriod]);
 
   const donutData = useMemo(() => {
