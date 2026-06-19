@@ -442,25 +442,22 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     if (stopwatchActive) {
       return sessionBaseStats.total + stopwatchSessionSeconds;
     }
-    const profileTotal = profileMap[user?.id || '']?.total_seconds || 0;
-    return Math.max(profileTotal, dbStats.total);
-  }, [stopwatchActive, sessionBaseStats.total, stopwatchSessionSeconds, profileMap, user, dbStats.total]);
+    return profileMap[user?.id || '']?.total_seconds || 0;
+  }, [stopwatchActive, sessionBaseStats.total, stopwatchSessionSeconds, profileMap, user]);
 
   const todayTotalSeconds = useMemo(() => {
     if (stopwatchActive) {
       return sessionBaseStats.today + stopwatchSessionSeconds;
     }
-    const localTotal = dailySubjectsData.reduce((acc, curr) => acc + curr.seconds, 0);
-    return Math.max(localTotal, dbStats.today);
-  }, [stopwatchActive, sessionBaseStats.today, stopwatchSessionSeconds, dailySubjectsData, dbStats.today]);
+    return dailySubjectsData.reduce((acc, curr) => acc + curr.seconds, 0);
+  }, [stopwatchActive, sessionBaseStats.today, stopwatchSessionSeconds, dailySubjectsData]);
 
   const weeklyTotalSeconds = useMemo(() => {
     if (stopwatchActive) {
       return sessionBaseStats.weekly + stopwatchSessionSeconds;
     }
-    const localWeeklyBase = Math.round(weeklyData.reduce((acc, curr) => acc + curr.value, 0) * 3600);
-    return Math.max(localWeeklyBase, dbStats.weekly);
-  }, [stopwatchActive, sessionBaseStats.weekly, stopwatchSessionSeconds, weeklyData, dbStats.weekly]);
+    return Math.round(weeklyData.reduce((acc, curr) => acc + curr.value, 0) * 3600);
+  }, [stopwatchActive, sessionBaseStats.weekly, stopwatchSessionSeconds, weeklyData]);
 
   const liveWeeklyData = useMemo(() => {
     const now = new Date();
@@ -937,9 +934,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     if (!stopwatchActive) {
       // START — capture current totals as the session base
       const profileTotal = profileMap[user.id]?.total_seconds || 0;
-      const baseToday = Math.max(dailySubjectsData.reduce((a, c) => a + c.seconds, 0), dbStats.today);
-      const baseWeekly = Math.max(Math.round(weeklyData.reduce((a, c) => a + c.value, 0) * 3600), dbStats.weekly);
-      const baseTotal = Math.max(profileTotal, dbStats.total);
+      const baseToday = dailySubjectsData.reduce((a, c) => a + c.seconds, 0);
+      const baseWeekly = Math.round(weeklyData.reduce((a, c) => a + c.value, 0) * 3600);
+      const baseTotal = profileTotal;
 
       setSessionBaseStats({ today: baseToday, weekly: baseWeekly, total: baseTotal });
       setActiveSessionInitialSeconds(baseToday);
@@ -1416,9 +1413,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             setStopwatchSessionSeconds(elapsed);
             setStopwatchAccumulated(0);
             setActiveSessionInitialSeconds(initial);
+            const recoveryWeekly = Math.round(weeklyData.reduce((a, c) => a + c.value, 0) * 3600);
             setSessionBaseStats({
               today: initial,
-              weekly: dbStats.weekly || 0,
+              weekly: recoveryWeekly,
               total: profileTotalSecs
             });
             setStopwatchActive(true);
