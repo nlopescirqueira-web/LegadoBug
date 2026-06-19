@@ -965,9 +965,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (error) console.error('[StudyContext] Error starting durable session:', error);
       });
     } else {
-      // STOP — sync unsynced tail to DB, then clear session
+      // STOP — sync unsynced tail to DB, update local state, then clear session
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((now - syncAnchor) / 1000);
+      const sessionSecs = stopwatchSessionSeconds;
 
       // Insert any remaining unsynced time as a session row
       if (unsyncedSecs >= 1 && user) {
@@ -979,6 +980,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         }]).then(({ error }) => {
           if (error) console.error('[StudyContext] Error syncing tail:', error);
         });
+      }
+
+      // Update local state with the full session time so display doesn't jump on stop
+      if (sessionSecs > 0) {
+        addStudyTime(sessionSecs, activeSubject);
       }
 
       // Clear active session in DB
@@ -1004,12 +1010,13 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('stopwatchActive', 'false');
       localStorage.removeItem('sessionStartedAt');
     }
-  }, [user, stopwatchActive, activeSubject, updateStreak, fetchRanking, dailySubjectsData, dbStats, weeklyData, profileMap]);
+  }, [user, stopwatchActive, activeSubject, stopwatchSessionSeconds, updateStreak, fetchRanking, addStudyTime, dailySubjectsData, dbStats, weeklyData, profileMap]);
 
   const resetStopwatch = useCallback(() => {
     if (stopwatchActive && user) {
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((Date.now() - syncAnchor) / 1000);
+      const sessionSecs = stopwatchSessionSecondsRef.current;
       if (unsyncedSecs >= 1) {
         supabase.from('study_sessions').insert([{
           user_id: user.id,
@@ -1017,6 +1024,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           duration_minutes: Math.ceil(unsyncedSecs / 60),
           duration_seconds: Math.floor(unsyncedSecs)
         }]);
+      }
+      if (sessionSecs > 0) {
+        addStudyTime(sessionSecs, activeSubject);
       }
       supabase.rpc('end_study_session', { p_user_id: user.id }).then(({ error }) => {
         if (error) console.error('[StudyContext] Error ending session on reset:', error);
@@ -1034,7 +1044,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('stopwatchActive', 'false');
     localStorage.removeItem('sessionStartedAt');
     localStorage.removeItem('lastSyncAt');
-  }, [stopwatchActive, activeSubject, user, fetchRanking]);
+  }, [stopwatchActive, activeSubject, user, fetchRanking, addStudyTime]);
 
   const currentSessionSecondsRef = React.useRef(0);
   const todayTotalSecondsRef = React.useRef(0);
