@@ -718,20 +718,6 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         setLastSyncTimestamp(Date.now());
         fetchRanking(true);
 
-        // Calculate new total using functional update to ensure we have latest data
-        setSubjectsData(currentSubjects => {
-          const newTotalSeconds = currentSubjects.reduce((acc, curr) => acc + curr.seconds, 0);
-          
-          supabase.from('profiles').update({ 
-            total_seconds: newTotalSeconds,
-            subjects_data: currentSubjects
-          }).eq('id', user.id).then(() => {
-            console.log('[StudyContext] Profile total_seconds updated:', newTotalSeconds);
-          });
-          
-          return currentSubjects;
-        });
-
         if (!hasIncrementedStreakTodayRef.current) {
           updateStreak();
         }
@@ -965,24 +951,21 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (error) console.error('[StudyContext] Error starting durable session:', error);
       });
     } else {
-      // STOP — sync any un-synced time first
+      // STOP — sync only the un-synced tail (periodic syncs already handled the rest)
       const syncAnchor = lastSyncAtRef.current;
       const unsyncedSecs = Math.floor((now - syncAnchor) / 1000);
 
+      if (unsyncedSecs >= 1) {
+        addStudyTime(unsyncedSecs, activeSubject);
+        syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
+      }
+
+      // Clear active session in DB (end_study_session just clears state, no row insertion)
       supabase.rpc('end_study_session', {
         p_user_id: user.id
-      }).then(({ data: duration, error }) => {
-        if (error) {
-          console.error('[StudyContext] Error ending durable session:', error);
-          if (unsyncedSecs >= 1) {
-            addStudyTime(unsyncedSecs, activeSubject);
-            syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
-          }
-        } else if (duration > 0) {
-          console.log(`[StudyContext] Durable session ended. Duration: ${duration}s`);
-          addStudyTime(duration, activeSubject);
-          fetchRanking(true);
-        }
+      }).then(({ error }) => {
+        if (error) console.error('[StudyContext] Error ending durable session:', error);
+        fetchRanking(true);
       });
 
       setStopwatchActive(false);
@@ -1005,6 +988,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         addStudyTime(unsyncedSecs, activeSubject);
         syncStudyTimeToDb(unsyncedSecs, activeSubject, true);
       }
+      if (user) {
+        supabase.rpc('end_study_session', { p_user_id: user.id }).then(({ error }) => {
+          if (error) console.error('[StudyContext] Error ending session on reset:', error);
+          fetchRanking(true);
+        });
+      }
     }
     setStopwatchActive(false);
     setSessionStartedAt(null);
@@ -1016,7 +1005,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('stopwatchActive', 'false');
     localStorage.removeItem('sessionStartedAt');
     localStorage.removeItem('lastSyncAt');
-  }, [stopwatchActive, activeSubject, syncStudyTimeToDb, addStudyTime]);
+  }, [stopwatchActive, activeSubject, syncStudyTimeToDb, addStudyTime, user, fetchRanking]);
 
   const currentSessionSecondsRef = React.useRef(0);
   const todayTotalSecondsRef = React.useRef(0);
@@ -1384,19 +1373,6 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           }
         }
         
-          // SYNC LOGIC: If local total is higher than DB total, it means some local sessions haven't synced.
-          // We should push the local total to the DB to ensure ranking is correct.
-          const localTotalSeconds = subjectsData.reduce((acc, curr) => acc + curr.seconds, 0);
-          const dbTotalSeconds = profile?.total_seconds || 0;
-          
-          if (localTotalSeconds > dbTotalSeconds + 60 && user) {
-            console.log(`[StudyContext] Local total (${localTotalSeconds}s) is significantly higher than DB (${dbTotalSeconds}s). Syncing...`);
-            supabase.from('profiles').update({ total_seconds: localTotalSeconds }).eq('id', user.id).then(() => {
-              console.log('[StudyContext] Local total synced to DB profile.');
-              fetchRanking(true);
-            });
-          }
-
           // Merge local and DB data instead of blindly overwriting
           if (sessions && !error) {
             // Process sessions to fill weeklyData, subjectsData, studiedDays
