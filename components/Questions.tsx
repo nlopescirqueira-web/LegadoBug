@@ -251,34 +251,28 @@ function FilterDropdown({
 const normalizeSubject = (s: string | null | undefined): string => {
   if (!s) return '';
   const val = s.trim();
-  const low = val.toLowerCase();
+  const low = val.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  // Português normalization
-  if (
-    low === 'português' ||
-    low === 'portugues' ||
-    low === 'língua portuguesa' ||
-    low === 'lingua portuguesa' ||
-    low.includes('língua portuguesa') ||
-    low.includes('lingua portuguesa') ||
-    (low.includes('português') && low.includes('língua')) ||
-    (low.includes('portugues') && low.includes('lingua'))
-  ) {
-    return 'Português';
-  }
-
-  // Common variations for other subjects
-  if (low.includes('raciocínio lógico') || low.includes('raciocinio logico') || low === 'rlm') {
-    return 'Raciocínio Lógico';
-  }
-
-  if (low === 'informática' || low === 'informatica' || low.includes('noções de informática')) {
-    return 'Informática';
-  }
-
-  if (low.includes('matemática') || low === 'matematica') {
-    return 'Matemática';
-  }
+  if (low.includes('portugu') || low.includes('lingua portug')) return 'Português';
+  if (low.includes('raciocinio logico') || low === 'rlm') return 'Raciocínio Lógico';
+  if (low.includes('informatica')) return 'Informática';
+  if (low.includes('matematica')) return 'Matemática';
+  if (low.includes('historia')) return 'História';
+  if (low.includes('geografia')) return 'Geografia';
+  if (low.includes('sociologia')) return 'Sociologia';
+  if (low.includes('filosofia')) return 'Filosofia';
+  if (low.includes('ingles')) return 'Inglês';
+  if (low.includes('espanhol')) return 'Espanhol';
+  if (low.includes('fisica')) return 'Física';
+  if (low.includes('quimica')) return 'Química';
+  if (low.includes('biologia')) return 'Biologia';
+  if (low.includes('legislacao militar')) return 'Legislação Militar';
+  if (low.includes('direito administrativo')) return 'Direito Administrativo';
+  if (low.includes('direito constitucional')) return 'Direito Constitucional';
+  if (low.includes('direito penal')) return 'Direito Penal';
+  if (low.includes('atualidades') || low.includes('conhecimentos gerais')) return 'Atualidades';
+  if (low.includes('redacao')) return 'Redação';
 
   return val;
 };
@@ -654,10 +648,9 @@ export default function Questions() {
       return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
     };
 
-    const disciplina = getUniqueCaseInsensitive([
-      'Português', 'Sociologia', 'Inglês', 'Espanhol', 'Direito Administrativo',
-      ...questions.map(q => normalizeSubject(q.subject))
-    ]);
+    const disciplina = getUniqueCaseInsensitive(
+      questions.map(q => normalizeSubject(q.subject)).filter(Boolean)
+    );
 
     const ano = getUniqueCaseInsensitive(
       questions.map(q => q.year != null ? String(q.year) : null)
