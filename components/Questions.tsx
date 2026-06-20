@@ -676,7 +676,13 @@ export default function Questions() {
       ? questions 
       : questions.filter(q => advFilters.disciplina.some(d => normalizeString(normalizeSubject(d)) === normalizeString(normalizeSubject(q.subject))));
     
-    const assunto = getUniqueCaseInsensitive(relevantForAssunto.map(q => q.topic));
+    const assunto = getUniqueCaseInsensitive(
+      relevantForAssunto.map(q => q.topic).filter(t => {
+        if (!t) return false;
+        const norm = t.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        return !/^questao\s*\d+$/i.test(norm) && !/^\d+$/.test(norm);
+      })
+    );
 
     return { disciplina, assunto, ano, banca, instituicao, dificuldade, videoRes };
   }, [questions, advFilters.disciplina]);
