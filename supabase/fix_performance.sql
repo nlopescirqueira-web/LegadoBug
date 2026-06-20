@@ -14,7 +14,7 @@ SET
   subject = q.subject,
   topic = q.topic
 FROM questions q
-WHERE qr.question_id = q.id
+WHERE qr.question_id = q.id::TEXT
   AND (qr.subject IS NULL OR qr.topic IS NULL);
 
 -- 3. Criar índice para consultas por usuário + data (performance)
