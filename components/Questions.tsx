@@ -254,6 +254,8 @@ const normalizeSubject = (s: string | null | undefined): string => {
   const low = val.toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+  if (/^questao\s*\d+$/i.test(low) || /^\d+$/.test(low)) return '';
+
   if (low.includes('portugu') || low.includes('lingua portug')) return 'Português';
   if (low.includes('raciocinio logico') || low === 'rlm') return 'Raciocínio Lógico';
   if (low.includes('informatica')) return 'Informática';
