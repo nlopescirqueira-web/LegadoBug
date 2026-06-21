@@ -156,23 +156,30 @@ export default function Settings() {
 
   const handleDeleteUser = async (profile: ProfileEntry) => {
     setDeletingUserId(profile.id);
-    setDeleteStatus('Removendo dados do usuário...');
+    setDeleteStatus('Excluindo conta permanentemente...');
     try {
-      await supabase.from('study_sessions').delete().eq('user_id', profile.id);
-      setDeleteStatus('Sessões de estudo removidas...');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setDeleteStatus('Erro: sessão expirada, faça login novamente');
+        return;
+      }
 
-      await supabase.from('simulado_attempts').delete().eq('user_id', profile.id);
-      setDeleteStatus('Tentativas de simulado removidas...');
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId: profile.id }),
+      });
 
-      await supabase.from('question_responses').delete().eq('user_id', profile.id);
-      setDeleteStatus('Respostas removidas...');
+      const result = await res.json();
+      if (!res.ok) {
+        setDeleteStatus('Erro: ' + (result.error || 'Falha ao excluir'));
+        return;
+      }
 
-      await supabase.from('flashcards').delete().eq('user_id', profile.id);
-      setDeleteStatus('Flashcards removidos...');
-
-      await supabase.from('profiles').delete().eq('id', profile.id);
-      setDeleteStatus('Perfil removido!');
-
+      setDeleteStatus('Conta excluída permanentemente!');
       setAllUsers(prev => prev.filter(u => u.id !== profile.id));
       setConfirmDeleteUser(null);
       setDeleteStatus('');
