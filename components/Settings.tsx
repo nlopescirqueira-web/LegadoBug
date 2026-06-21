@@ -158,24 +158,19 @@ export default function Settings() {
     setDeletingUserId(profile.id);
     setDeleteStatus('Excluindo conta permanentemente...');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
         setDeleteStatus('Erro: sessão expirada, faça login novamente');
         return;
       }
 
-      const res = await fetch('/api/admin/delete-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ userId: profile.id }),
+      const { error } = await supabase.rpc('admin_delete_user', {
+        p_admin_id: currentUser.id,
+        p_target_user_id: profile.id,
       });
 
-      const result = await res.json();
-      if (!res.ok) {
-        setDeleteStatus('Erro: ' + (result.error || 'Falha ao excluir'));
+      if (error) {
+        setDeleteStatus('Erro: ' + error.message);
         return;
       }
 
