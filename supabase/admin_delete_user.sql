@@ -25,7 +25,7 @@ BEGIN
 
   -- Limpar dados relacionados (para tabelas sem CASCADE)
   DELETE FROM study_sessions WHERE user_id = p_target_user_id;
-  DELETE FROM simulado_attempts WHERE user_id = p_target_user_id;
+  DELETE FROM simulado_attempts WHERE user_id = p_target_user_id::TEXT OR user_id::TEXT = p_target_user_id::TEXT;
   DELETE FROM question_responses WHERE user_id = p_target_user_id;
   DELETE FROM question_comments WHERE user_id = p_target_user_id;
   DELETE FROM flashcards WHERE user_id = p_target_user_id;
