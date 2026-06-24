@@ -480,7 +480,7 @@ export default function Simulados() {
       const current = prev[qId] || [];
       if (current.includes(optIdx)) return { ...prev, [qId]: current.filter(i => i !== optIdx) };
       const q = solveQuestions.find(sq => sq.id === qId);
-      const maxCuts = (q?.options?.length || 5) - 2;
+      const maxCuts = (q?.options?.length || 5) - 1;
       if (current.length >= maxCuts) return prev;
       return { ...prev, [qId]: [...current, optIdx] };
     });

@@ -765,7 +765,7 @@ export default function Questions() {
         return { ...prev, [qId]: current.filter(i => i !== optIdx) };
       } else {
         const q = questions.find(qq => qq.id === qId);
-        const maxCuts = (q?.options?.length || 5) - 2;
+        const maxCuts = (q?.options?.length || 5) - 1;
         if (current.length >= maxCuts) return prev;
         if (tempAnswers[qId] === optIdx) {
           setTempAnswers(prevTemp => {

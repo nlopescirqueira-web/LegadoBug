@@ -6,11 +6,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Bell,
   Volume2,
-  Shield,
   Trash2,
   ChevronRight,
-  Globe,
-  Smartphone,
   Info,
   AlertTriangle,
   Users,
@@ -216,28 +213,6 @@ export default function Settings() {
               description="Efeitos sonoros durante o uso do cronômetro"
               value={sound}
               onChange={setSound}
-            />
-          </div>
-        </section>
-
-        {/* Sistema */}
-        <section className="space-y-4">
-          <h2 className="text-[10px] uppercase tracking-[0.3em] text-white/70 font-black px-2">Sistema</h2>
-          <div className="grid grid-cols-1 gap-4">
-            <SettingLink
-              icon={Globe}
-              label="Idioma"
-              description="Português (Brasil)"
-            />
-            <SettingLink
-              icon={Shield}
-              label="Privacidade"
-              description="Gerencie como seus dados são exibidos"
-            />
-            <SettingLink
-              icon={Smartphone}
-              label="Dispositivos"
-              description="Gerencie sessões ativas em outros aparelhos"
             />
           </div>
         </section>
