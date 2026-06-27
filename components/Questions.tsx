@@ -850,12 +850,43 @@ export default function Questions() {
   const handleSaveImage = async (questionId: string) => {
     setSavingImage(true);
     try {
+      let finalUrl: string | null = null;
+
+      if (editingImagePreview) {
+        if (editingImagePreview.startsWith('data:')) {
+          const res = await fetch(editingImagePreview);
+          const blob = await res.blob();
+          const fileName = `questions/${questionId}_${Date.now()}.webp`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('question-images')
+            .upload(fileName, blob, { contentType: 'image/webp', upsert: true });
+
+          if (uploadError) {
+            if (uploadError.message?.includes('not found') || uploadError.message?.includes('does not exist')) {
+              alert('Erro: Bucket "question-images" não existe. Crie um bucket público chamado "question-images" no Supabase Storage.');
+              setSavingImage(false);
+              return;
+            }
+            throw uploadError;
+          }
+
+          const { data: urlData } = supabase.storage
+            .from('question-images')
+            .getPublicUrl(fileName);
+          finalUrl = urlData.publicUrl;
+        } else {
+          finalUrl = editingImagePreview;
+        }
+      }
+
       const { error } = await supabase
         .from('questions')
-        .update({ image_url: editingImagePreview || null })
+        .update({ image_url: finalUrl })
         .eq('id', questionId);
       if (error) throw error;
-      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, image_url: editingImagePreview || null } : q));
+
+      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, image_url: finalUrl } : q));
       setEditingImageQuestionId(null);
       setEditingImagePreview(null);
     } catch (err: any) {
