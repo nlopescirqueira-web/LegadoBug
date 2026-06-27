@@ -441,8 +441,7 @@ BEGIN
   INTO v_question_ids
   FROM questions
   WHERE org = 'Legado Militar'
-    AND year = '2026'
-  ORDER BY created_at;
+    AND year = '2026';
 
   -- Limitar às últimas 80
   v_question_ids := v_question_ids[array_length(v_question_ids, 1) - 79 : array_length(v_question_ids, 1)];
