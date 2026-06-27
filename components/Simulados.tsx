@@ -651,6 +651,11 @@ export default function Simulados() {
                 {isExpanded && (
                   <div className="px-5 pb-5 space-y-4 border-t border-white/5 pt-4">
                     {/* Full question text */}
+                    {q.image_url && (
+                      <div className="w-full overflow-hidden rounded-xl border border-white/10">
+                        <img src={q.image_url} alt="Imagem da questão" className="w-full max-h-[300px] object-contain" />
+                      </div>
+                    )}
                     <div className="text-sm text-white/80 whitespace-pre-wrap">{q.text}</div>
 
                     {/* Options */}
@@ -809,6 +814,11 @@ export default function Simulados() {
             <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{currentQ.subject_group || currentQ.subject}</span>
           </div>
 
+          {currentQ.image_url && (
+            <div className="w-full overflow-hidden rounded-2xl border border-white/10">
+              <img src={currentQ.image_url} alt="Imagem da questão" className="w-full max-h-[400px] object-contain" />
+            </div>
+          )}
           <div className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap"><Markdown>{currentQ.text}</Markdown></div>
 
           <div className="space-y-2">
