@@ -280,7 +280,7 @@ to_jsonb(ARRAY['y = -0,004x² + 0,8x', 'y = -0,01x² + x', 'y = -0,002x² + 0,4x
 -- Q53 tem imagem (matrizes)
 (gen_random_uuid(), 'Matemática', 'Matrizes',
 'Na criptografia de mensagens militares, utilizou-se a matriz de codificação M = [3 1; 4 2]. Para decifrar a mensagem, o receptor deve utilizar a matriz inversa M⁻¹. A matriz de decodificação é:',
-to_jsonb(ARRAY['[1 -0,5; -2 1,5])', '[2 -1; -4 3]', '[1,5 -0,5; -2 1]', '[-3 -1; -4 -2]', '[1 1; 1 1]'],
+to_jsonb(ARRAY['[1 -0,5; -2 1,5]', '[2 -1; -4 3]', '[1,5 -0,5; -2 1]', '[-3 -1; -4 -2]', '[1 1; 1 1]']),
 0, 'Legado Militar', '2026', 'Médio', 'VUNESP'),
 
 (gen_random_uuid(), 'Matemática', 'Polinômios',
