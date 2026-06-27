@@ -458,18 +458,21 @@ BEGIN
     (
       SELECT jsonb_agg(
         jsonb_build_object(
-          'question_id', q.id::text,
-          'order_index', row_number() OVER (ORDER BY q.created_at) - 1,
-          'subject_group', q.subject
+          'question_id', r.id::text,
+          'order_index', r.rn - 1,
+          'subject_group', r.subject
         )
       )
       FROM (
-        SELECT id, subject, created_at
-        FROM questions
-        WHERE org = 'Legado Militar' AND year = '2026'
-        ORDER BY created_at DESC
-        LIMIT 80
-      ) q
+        SELECT q.id, q.subject, row_number() OVER (ORDER BY q.created_at) AS rn
+        FROM (
+          SELECT id, subject, created_at
+          FROM questions
+          WHERE org = 'Legado Militar' AND year = '2026'
+          ORDER BY created_at DESC
+          LIMIT 80
+        ) q
+      ) r
     )
   );
 END $$;
