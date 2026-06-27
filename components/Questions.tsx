@@ -44,7 +44,8 @@ import {
   Flag,
   AlertOctagon,
   Settings,
-  Eye
+  Eye,
+  ImagePlus,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -354,6 +355,11 @@ export default function Questions() {
   // Admin: edit all fields
   const [editingFieldsQuestionId, setEditingFieldsQuestionId] = useState<string | null>(null);
   const [editingFields, setEditingFields] = useState<Record<string, any>>({});
+
+  // Image editing (admin only)
+  const [editingImageQuestionId, setEditingImageQuestionId] = useState<string | null>(null);
+  const [editingImagePreview, setEditingImagePreview] = useState<string | null>(null);
+  const [savingImage, setSavingImage] = useState(false);
 
   // Error reports
   const [reportingQuestionId, setReportingQuestionId] = useState<string | null>(null);
@@ -839,6 +845,46 @@ export default function Questions() {
     } catch (err: any) {
       alert('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
     }
+  };
+
+  const handleSaveImage = async (questionId: string) => {
+    setSavingImage(true);
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({ image_url: editingImagePreview || null })
+        .eq('id', questionId);
+      if (error) throw error;
+      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, image_url: editingImagePreview || null } : q));
+      setEditingImageQuestionId(null);
+      setEditingImagePreview(null);
+    } catch (err: any) {
+      alert('Erro ao salvar imagem: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setSavingImage(false);
+    }
+  };
+
+  const handleImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = document.createElement('img');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 1200;
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, w, h);
+        setEditingImagePreview(canvas.toDataURL('image/webp', 0.8));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   // Error reports
@@ -1465,17 +1511,27 @@ export default function Questions() {
 
                   <div className="text-lg leading-relaxed text-white font-medium tracking-tight markdown-body">
                     {q.image_url && (
-                      <div className="mb-6 relative w-full h-[400px] overflow-hidden rounded-2xl border border-white/10">
-                        <Image 
-                          src={q.image_url}
-                          alt="Imagem da questão"
-                          fill
-                          priority={idx < 5}
-                          loading={idx < 5 ? "eager" : "lazy"}
-                          className="object-contain"
-                          referrerPolicy="no-referrer"
-                          sizes="(max-width: 768px) 100vw, 800px"
-                        />
+                      <div className="mb-6 relative w-full overflow-hidden rounded-2xl border border-white/10">
+                        {q.image_url.startsWith('data:') ? (
+                          <img
+                            src={q.image_url}
+                            alt="Imagem da questão"
+                            className="w-full max-h-[400px] object-contain"
+                          />
+                        ) : (
+                          <div className="relative w-full h-[400px]">
+                            <Image
+                              src={q.image_url}
+                              alt="Imagem da questão"
+                              fill
+                              priority={idx < 5}
+                              loading={idx < 5 ? "eager" : "lazy"}
+                              className="object-contain"
+                              referrerPolicy="no-referrer"
+                              sizes="(max-width: 768px) 100vw, 800px"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     <Markdown>{q.text}</Markdown>
@@ -1652,6 +1708,22 @@ export default function Questions() {
                         >
                           <CheckCircle2 size={14} />
                           Gabarito
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingImageQuestionId(q.id);
+                            setEditingImagePreview(q.image_url || null);
+                          }}
+                          className={cn(
+                            "flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                            q.image_url
+                              ? "text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/10"
+                              : "text-white/40 hover:text-purple-400 hover:bg-purple-500/10"
+                          )}
+                          title="Adicionar/editar imagem"
+                        >
+                          <ImagePlus size={14} />
+                          Imagem
                         </button>
                         <button
                           onClick={() => {
@@ -1872,6 +1944,71 @@ export default function Questions() {
                             className="px-4 py-2 bg-white/5 text-white/40 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10">Cancelar</button>
                           <button onClick={() => handleSaveFields(q.id)}
                             className="px-6 py-2 bg-[#3B82F6] text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#3B82F6]/80">Salvar Alterações</button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+
+                  {/* Image Edit Modal */}
+                  {editingImageQuestionId === q.id && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4"
+                      onClick={() => { setEditingImageQuestionId(null); setEditingImagePreview(null); }}>
+                      <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+                        className="bg-[#111] border border-purple-500/20 rounded-2xl p-6 w-full max-w-lg space-y-4"
+                        onClick={e => e.stopPropagation()}
+                        onPaste={(e) => {
+                          const items = e.clipboardData?.items;
+                          if (!items) return;
+                          for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.startsWith('image/')) {
+                              const file = items[i].getAsFile();
+                              if (file) handleImageFile(file);
+                              break;
+                            }
+                          }
+                        }}>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                            <ImagePlus size={16} className="text-purple-400" /> Imagem da Questão
+                          </h3>
+                          <button onClick={() => { setEditingImageQuestionId(null); setEditingImagePreview(null); }} className="text-white/40 hover:text-white"><X size={20} /></button>
+                        </div>
+                        <p className="text-[10px] text-white/30 line-clamp-2">{q.text}</p>
+
+                        {editingImagePreview ? (
+                          <div className="space-y-3">
+                            <div className="relative w-full h-[300px] overflow-hidden rounded-xl border border-purple-500/20 bg-black/40">
+                              <img src={editingImagePreview} alt="Preview" className="w-full h-full object-contain" />
+                            </div>
+                            <button
+                              onClick={() => setEditingImagePreview(null)}
+                              className="w-full py-2 bg-red-500/10 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 flex items-center justify-center gap-2"
+                            >
+                              <Trash2 size={12} /> Remover Imagem
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <label
+                              className="flex flex-col items-center justify-center gap-3 py-10 border-2 border-dashed border-purple-500/30 rounded-xl cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-all"
+                            >
+                              <ImagePlus size={32} className="text-purple-400/50" />
+                              <span className="text-xs text-white/40 font-bold uppercase tracking-widest">Clique para selecionar</span>
+                              <span className="text-[10px] text-white/20">ou cole uma imagem (Ctrl+V)</span>
+                              <input type="file" accept="image/*" className="hidden"
+                                onChange={(e) => { if (e.target.files?.[0]) handleImageFile(e.target.files[0]); }} />
+                            </label>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 justify-end pt-2">
+                          <button onClick={() => { setEditingImageQuestionId(null); setEditingImagePreview(null); }}
+                            className="px-4 py-2 bg-white/5 text-white/40 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10">Cancelar</button>
+                          <button onClick={() => handleSaveImage(q.id)} disabled={savingImage}
+                            className="px-6 py-2 bg-purple-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-400 disabled:opacity-30 transition-all flex items-center gap-2">
+                            {savingImage ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar
+                          </button>
                         </div>
                       </motion.div>
                     </motion.div>
