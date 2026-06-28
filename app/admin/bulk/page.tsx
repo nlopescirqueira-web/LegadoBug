@@ -15,6 +15,7 @@ interface QuestionRow {
   org: string;
   subject: string | null;
   created_at: string;
+  question_number: number | null;
 }
 
 function BulkVideoUpload() {
@@ -55,8 +56,9 @@ function BulkVideoUpload() {
     setLoadingQuestions(true);
     const { data } = await supabase
       .from('questions')
-      .select('id, text, video_url, org, subject, created_at')
+      .select('id, text, video_url, org, subject, created_at, question_number')
       .eq('org', org)
+      .order('question_number', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true });
     setAllQuestions(data || []);
     setLoadingQuestions(false);
@@ -140,7 +142,7 @@ function BulkVideoUpload() {
   const withVideo = allQuestions.filter(q => q.video_url).length;
   const withoutVideo = totalCount - withVideo;
 
-  const globalIndex = (q: QuestionRow) => allQuestions.indexOf(q) + 1;
+  const displayNumber = (q: QuestionRow) => q.question_number || (allQuestions.indexOf(q) + 1);
 
   return (
     <div className="space-y-6">
@@ -208,7 +210,7 @@ function BulkVideoUpload() {
                 <div key={q.id} className={`flex items-start gap-2 px-3 py-2 rounded-xl border text-xs group ${
                   q.video_url ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/5 bg-white/[0.02]'
                 }`}>
-                  <span className="font-black text-emerald-400/70 w-10 shrink-0 pt-0.5">Q{globalIndex(q)}</span>
+                  <span className="font-black text-emerald-400/70 w-10 shrink-0 pt-0.5">Q{displayNumber(q)}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-white/70 line-clamp-2">{q.text}</p>
                     <div className="flex gap-2 mt-1">
@@ -276,7 +278,7 @@ function BulkVideoUpload() {
                       'border-white/5 bg-white/[0.02]'
                     }`}>
                       <div className="flex items-center gap-3">
-                        <span className="font-black text-emerald-400/70 w-10 shrink-0">{q ? `Q${globalIndex(q)}` : '—'}</span>
+                        <span className="font-black text-emerald-400/70 w-10 shrink-0">{q ? `Q${displayNumber(q)}` : '—'}</span>
                         <span className="text-white/70 truncate flex-1">{file.name}</span>
                         <span className="text-white/30 shrink-0">{(file.size / 1024 / 1024).toFixed(1)}MB</span>
                         {tooLarge && <span className="text-red-400 font-bold shrink-0">EXCEDE 50MB</span>}
