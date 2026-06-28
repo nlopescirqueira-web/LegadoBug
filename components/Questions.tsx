@@ -829,9 +829,9 @@ export default function Questions() {
       alert('Selecione um arquivo de vídeo válido.');
       return;
     }
-    const maxSize = 100 * 1024 * 1024;
+    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert('O vídeo deve ter no máximo 100MB.');
+      alert('O vídeo deve ter no máximo 50MB. Use o HandBrake para comprimir.');
       return;
     }
     setUploadingVideo(true);
@@ -1871,7 +1871,7 @@ export default function Questions() {
                         <label className={`flex flex-col items-center justify-center gap-2 w-full py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploadingVideo ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/10 hover:border-amber-500/30 hover:bg-white/5'}`}>
                           <Upload size={24} className="text-amber-400" />
                           <span className="text-xs font-bold uppercase tracking-widest text-white/60">
-                            {uploadingVideo ? videoUploadProgress : 'Clique para enviar um vídeo (máx 100MB)'}
+                            {uploadingVideo ? videoUploadProgress : 'Clique para enviar um vídeo (máx 50MB)'}
                           </span>
                           <span className="text-[10px] text-white/30">MP4, WebM, MOV</span>
                           <input
