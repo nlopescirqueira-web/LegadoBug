@@ -1784,7 +1784,7 @@ export default function Questions() {
                             setEditingVideoUrl(q.video_url || '');
                           }}
                           className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-amber-400 hover:bg-amber-500/10"
-                          title="Editar link do vídeo"
+                          title="Editar resolução em vídeo"
                         >
                           <Pencil size={14} />
                           Vídeo
@@ -1860,7 +1860,7 @@ export default function Questions() {
                         <div className="flex items-center justify-between">
                           <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
                             <Video size={16} className="text-amber-400" />
-                            Vídeo da Questão
+                            Resolução em Vídeo
                           </h3>
                           <button onClick={() => setEditingVideoQuestionId(null)} className="text-white/40 hover:text-white">
                             <X size={20} />
@@ -1871,7 +1871,7 @@ export default function Questions() {
                         <label className={`flex flex-col items-center justify-center gap-2 w-full py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploadingVideo ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/10 hover:border-amber-500/30 hover:bg-white/5'}`}>
                           <Upload size={24} className="text-amber-400" />
                           <span className="text-xs font-bold uppercase tracking-widest text-white/60">
-                            {uploadingVideo ? videoUploadProgress : 'Clique para enviar um vídeo (máx 50MB)'}
+                            {uploadingVideo ? videoUploadProgress : 'Clique para enviar a resolução em vídeo (máx 50MB)'}
                           </span>
                           <span className="text-[10px] text-white/30">MP4, WebM, MOV</span>
                           <input
