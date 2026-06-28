@@ -1738,7 +1738,7 @@ export default function Questions() {
                       <BookOpen size={14} />
                       Gabarito
                     </button>
-                    {getVideoStatus(q) === 'Sim' && (
+                    {getVideoStatus(q) === 'Sim' && answers[q.id] !== undefined && (
                       <button
                         onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'video' ? undefined : 'video' }))}
                         className={cn(
@@ -2220,7 +2220,7 @@ export default function Questions() {
                       </motion.div>
                     )}
 
-                    {activeTab[q.id] === 'video' && getVideoStatus(q) === 'Sim' && (
+                    {activeTab[q.id] === 'video' && getVideoStatus(q) === 'Sim' && answers[q.id] !== undefined && (
                       <motion.div
                         key="video"
                         initial={{ opacity: 0, y: -10, height: 0 }}
@@ -2505,7 +2505,7 @@ export default function Questions() {
                           activeTab[q.id] === 'gabarito' ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "text-white/70 hover:text-white/100 hover:bg-white/5")}>
                         <BookOpen size={14} /> Gabarito
                       </button>
-                      {getVideoStatus(q) === 'Sim' && (
+                      {getVideoStatus(q) === 'Sim' && answers[q.id] !== undefined && (
                         <button onClick={() => setActiveTab(prev => ({ ...prev, [q.id]: prev[q.id] === 'video' ? undefined : 'video' }))}
                           className={cn("flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
                             activeTab[q.id] === 'video' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "text-white/70 hover:text-white/100 hover:bg-white/5")}>
@@ -2523,7 +2523,7 @@ export default function Questions() {
                           </div>
                         </motion.div>
                       )}
-                      {activeTab[q.id] === 'video' && getVideoStatus(q) === 'Sim' && (
+                      {activeTab[q.id] === 'video' && getVideoStatus(q) === 'Sim' && answers[q.id] !== undefined && (
                         <motion.div key="video" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -10, height: 0 }} className="overflow-hidden">
                           <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-6 mt-2">
                             <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-4"><Play size={14} /> Resolução em Vídeo</div>
