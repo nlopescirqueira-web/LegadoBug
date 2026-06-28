@@ -38,6 +38,7 @@ import {
   X,
   FolderInput,
   Video,
+  Upload,
   Link,
   ExternalLink,
   Save,
@@ -299,6 +300,10 @@ const isYouTubeUrl = (url: string): boolean => {
   return url.includes('youtube.com') || url.includes('youtu.be');
 };
 
+const isVideoFileUrl = (url: string): boolean => {
+  return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url) || url.includes('question-videos');
+};
+
 const getYouTubeEmbedUrl = (url: string): string => {
   return url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/');
 };
@@ -347,6 +352,8 @@ export default function Questions() {
   // Video editing modal (admin only)
   const [editingVideoQuestionId, setEditingVideoQuestionId] = useState<string | null>(null);
   const [editingVideoUrl, setEditingVideoUrl] = useState('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState('');
 
   // Gabarito editing (admin only)
   const [editingGabaritoQuestionId, setEditingGabaritoQuestionId] = useState<string | null>(null);
@@ -814,6 +821,59 @@ export default function Questions() {
       setEditingVideoUrl('');
     } catch (err: any) {
       alert('Erro ao salvar vídeo: ' + (err.message || 'Erro desconhecido'));
+    }
+  };
+
+  const handleVideoFileUpload = async (questionId: string, file: File) => {
+    if (!file.type.startsWith('video/')) {
+      alert('Selecione um arquivo de vídeo válido.');
+      return;
+    }
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('O vídeo deve ter no máximo 100MB.');
+      return;
+    }
+    setUploadingVideo(true);
+    setVideoUploadProgress('Enviando vídeo...');
+    try {
+      const ext = file.name.split('.').pop() || 'mp4';
+      const fileName = `videos/${questionId}_${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('question-videos')
+        .upload(fileName, file, { contentType: file.type, upsert: true });
+
+      if (uploadError) {
+        if (uploadError.message?.includes('not found') || uploadError.message?.includes('does not exist')) {
+          alert('Erro: Bucket "question-videos" não existe. Crie um bucket público chamado "question-videos" no Supabase Storage.');
+          setUploadingVideo(false);
+          setVideoUploadProgress('');
+          return;
+        }
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('question-videos')
+        .getPublicUrl(fileName);
+      const publicUrl = urlData.publicUrl;
+
+      const { error } = await supabase
+        .from('questions')
+        .update({ video_url: publicUrl })
+        .eq('id', questionId);
+      if (error) throw error;
+
+      setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, video_url: publicUrl } : q));
+      setEditingVideoQuestionId(null);
+      setEditingVideoUrl('');
+      setVideoUploadProgress('');
+    } catch (err: any) {
+      alert('Erro ao enviar vídeo: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setUploadingVideo(false);
+      setVideoUploadProgress('');
     }
   };
 
@@ -1800,20 +1860,49 @@ export default function Questions() {
                         <div className="flex items-center justify-between">
                           <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
                             <Video size={16} className="text-amber-400" />
-                            Editar Link do Vídeo
+                            Vídeo da Questão
                           </h3>
                           <button onClick={() => setEditingVideoQuestionId(null)} className="text-white/40 hover:text-white">
                             <X size={20} />
                           </button>
                         </div>
+
+                        {/* Upload de arquivo */}
+                        <label className={`flex flex-col items-center justify-center gap-2 w-full py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploadingVideo ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/10 hover:border-amber-500/30 hover:bg-white/5'}`}>
+                          <Upload size={24} className="text-amber-400" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-white/60">
+                            {uploadingVideo ? videoUploadProgress : 'Clique para enviar um vídeo (máx 100MB)'}
+                          </span>
+                          <span className="text-[10px] text-white/30">MP4, WebM, MOV</span>
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="hidden"
+                            disabled={uploadingVideo}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleVideoFileUpload(q.id, file);
+                            }}
+                          />
+                        </label>
+
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-px bg-white/10" />
+                          <span className="text-[10px] text-white/30 font-bold uppercase tracking-widest">ou cole um link</span>
+                          <div className="flex-1 h-px bg-white/10" />
+                        </div>
+
+                        {/* URL do YouTube */}
                         <input
                           type="text"
                           value={editingVideoUrl}
                           onChange={(e) => setEditingVideoUrl(e.target.value)}
-                          placeholder="Cole o link do YouTube aqui (ex: https://youtu.be/abc123)"
+                          placeholder="Cole o link do YouTube (ex: https://youtu.be/abc123)"
                           className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
                         />
-                        {editingVideoUrl && (
+
+                        {/* Preview */}
+                        {editingVideoUrl && isYouTubeUrl(editingVideoUrl) && (
                           <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10 bg-black">
                             <iframe
                               width="100%" height="100%"
@@ -1824,6 +1913,14 @@ export default function Questions() {
                             />
                           </div>
                         )}
+
+                        {/* Preview de vídeo já salvo */}
+                        {q.video_url && isVideoFileUrl(q.video_url) && !editingVideoUrl && (
+                          <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10 bg-black">
+                            <video src={q.video_url} controls className="w-full h-full" />
+                          </div>
+                        )}
+
                         <div className="flex gap-2 justify-end">
                           {q.video_url && (
                             <button
@@ -1833,12 +1930,14 @@ export default function Questions() {
                               Remover Vídeo
                             </button>
                           )}
-                          <button
-                            onClick={() => handleSaveVideoUrl(q.id, editingVideoUrl)}
-                            className="px-6 py-2 bg-amber-500 text-black rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
-                          >
-                            Salvar
-                          </button>
+                          {editingVideoUrl && (
+                            <button
+                              onClick={() => handleSaveVideoUrl(q.id, editingVideoUrl)}
+                              className="px-6 py-2 bg-amber-500 text-black rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
+                            >
+                              Salvar Link
+                            </button>
+                          )}
                         </div>
                       </motion.div>
                     </motion.div>
@@ -2144,6 +2243,16 @@ export default function Questions() {
                               allowFullScreen
                             />
                           </div>
+                          ) : isVideoFileUrl(q.video_url) ? (
+                          <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
+                            <video
+                              src={q.video_url}
+                              controls
+                              controlsList="nodownload"
+                              className="w-full h-full"
+                              preload="metadata"
+                            />
+                          </div>
                           ) : (
                           <a href={q.video_url} target="_blank" rel="noopener noreferrer"
                             className="flex items-center justify-center gap-3 w-full py-8 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 hover:bg-emerald-500/20 transition-all group">
@@ -2421,6 +2530,10 @@ export default function Questions() {
                             {isYouTubeUrl(q.video_url) ? (
                             <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
                               <iframe width="100%" height="100%" src={getYouTubeEmbedUrl(q.video_url)} title="Resolução em Vídeo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                            </div>
+                            ) : isVideoFileUrl(q.video_url) ? (
+                            <div className="w-full aspect-video rounded-lg overflow-hidden border border-gray-800 bg-black">
+                              <video src={q.video_url} controls controlsList="nodownload" className="w-full h-full" preload="metadata" />
                             </div>
                             ) : (
                             <a href={q.video_url} target="_blank" rel="noopener noreferrer"

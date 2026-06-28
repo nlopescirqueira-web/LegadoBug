@@ -497,6 +497,7 @@ export default function Simulados() {
   };
 
   const isYouTubeUrl = (url: string) => /youtube\.com|youtu\.be/i.test(url);
+  const isVideoFileUrl = (url: string): boolean => /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url) || url.includes('question-videos');
   const getYouTubeEmbedUrl = (url: string) => {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
     return match ? `https://www.youtube.com/embed/${match[1]}` : null;
@@ -699,6 +700,10 @@ export default function Simulados() {
                           <div className="aspect-video rounded-xl overflow-hidden">
                             <iframe src={getYouTubeEmbedUrl(q.video_url) || ''} className="w-full h-full" allowFullScreen
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+                          </div>
+                        ) : isVideoFileUrl(q.video_url) ? (
+                          <div className="aspect-video rounded-xl overflow-hidden bg-black">
+                            <video src={q.video_url} controls controlsList="nodownload" className="w-full h-full" preload="metadata" />
                           </div>
                         ) : (
                           <a href={q.video_url} target="_blank" rel="noopener noreferrer"
