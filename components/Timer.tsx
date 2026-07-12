@@ -20,6 +20,7 @@ export default function Timer() {
   const {
     todayTotalSeconds = 0,
     weeklyTotalSeconds = 0,
+    monthlyTotalSeconds = 0,
     allTimeSeconds = 0,
     formatSeconds,
     stopwatchActive = false,
@@ -215,7 +216,7 @@ export default function Timer() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-white/30" />
@@ -227,7 +228,7 @@ export default function Timer() {
           <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2">
               <BookOpen size={14} className="text-[#3B82F6]/50" />
-              <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">{activeSubject}</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-white/40 truncate">{activeSubject}</span>
             </div>
             <p className="text-lg font-black text-[#3B82F6] tabular-nums">{formatSeconds(subjectTotalSeconds)}</p>
           </div>
@@ -241,6 +242,14 @@ export default function Timer() {
           </div>
 
           <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-1">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={14} className="text-white/30" />
+              <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Mensal</span>
+            </div>
+            <p className="text-lg font-black text-white/70 tabular-nums">{formatCompact(monthlyTotalSeconds)}</p>
+          </div>
+
+          <div className="col-span-2 lg:col-span-1 bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2">
               <TrendingUp size={14} className="text-white/30" />
               <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Total Geral</span>

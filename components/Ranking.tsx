@@ -257,7 +257,7 @@ export default function Ranking() {
     getRankIcon
   } = useStudy();
   const { user: currentUser } = useAuth();
-  const [tab, setTab] = useState<'diario' | 'semanal' | 'geral'>('diario');
+  const [tab, setTab] = useState<'diario' | 'semanal' | 'mensal' | 'geral'>('diario');
   const [countdown, setCountdown] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -314,15 +314,23 @@ export default function Ranking() {
     return () => clearInterval(interval);
   }, []);
 
+  const formatRankingTime = (seconds: number) => {
+    if (tab === 'diario') return formatSeconds(seconds);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
+    return `${m}m`;
+  };
+
   const currentRanking = getGlobalRanking(tab).map((entry, index) => {
     const isMe = currentUser?.id === entry.email;
     const seconds = entry.seconds;
-    
+
     return {
       rank: index + 1,
       name: entry.name,
       email: entry.email,
-      time: formatSeconds(seconds),
+      time: formatRankingTime(seconds),
       avatar: entry.name.charAt(0).toUpperCase(),
       photo: entry.photo || (isMe ? currentUser?.photo : null),
       seconds: seconds,
@@ -342,7 +350,7 @@ export default function Ranking() {
 
   const nextRankEntry = myEntry && myEntry.rank > 1 ? currentRanking[myEntry.rank - 2] : null;
   const secondsToNext = (nextRankEntry && myEntry) ? Math.max(0, nextRankEntry.seconds - myEntry.seconds) : 0;
-  const timeToNext = formatSeconds(secondsToNext);
+  const timeToNext = formatRankingTime(secondsToNext);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 md:p-12">
@@ -393,18 +401,18 @@ export default function Ranking() {
         {/* Tabs Section */}
         <div className="flex flex-col sm:flex-row gap-6 items-center justify-between">
           <div className="flex bg-[#0A0A0A] p-1 rounded-xl sm:rounded-2xl border border-white/5 w-full sm:w-auto overflow-x-auto no-scrollbar">
-            {(['diario', 'semanal', 'geral'] as const).map((t) => (
+            {(['diario', 'semanal', 'mensal', 'geral'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "flex-1 sm:flex-none px-4 sm:px-8 py-2.5 sm:py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] rounded-lg sm:rounded-xl transition-all relative whitespace-nowrap",
-                  tab === t 
-                    ? "bg-[#3B82F6] text-white shadow-[0_0_20px_rgba(0,85,255,0.2)]" 
+                  "flex-1 sm:flex-none px-3 sm:px-6 py-2.5 sm:py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] rounded-lg sm:rounded-xl transition-all relative whitespace-nowrap",
+                  tab === t
+                    ? "bg-[#3B82F6] text-white shadow-[0_0_20px_rgba(0,85,255,0.2)]"
                     : "text-white/90 hover:text-white/100"
                 )}
               >
-                {t === 'diario' ? 'Diário' : t === 'semanal' ? 'Semanal' : 'Geral'}
+                {t === 'diario' ? 'Diário' : t === 'semanal' ? 'Semanal' : t === 'mensal' ? 'Mensal' : 'Geral'}
               </button>
             ))}
           </div>
@@ -490,7 +498,7 @@ export default function Ranking() {
                       <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest">Top 5% da Elite</span>
                     </div>
                     <div className="text-[8px] sm:text-[10px] font-black text-white/95 uppercase tracking-widest">
-                      {tab === 'diario' ? 'Hoje' : tab === 'semanal' ? 'Semanal' : 'Geral'}
+                      {tab === 'diario' ? 'Hoje' : tab === 'semanal' ? 'Semanal' : tab === 'mensal' ? 'Mensal' : 'Geral'}
                     </div>
                   </div>
                 </div>

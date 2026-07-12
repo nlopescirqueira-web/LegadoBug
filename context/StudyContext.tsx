@@ -76,13 +76,15 @@ interface StudyContextType {
   formatTotalTime: (seconds: number) => string;
   formatFriendlyTime: (seconds: number) => string;
   formatSeconds: (seconds: number) => string;
-  getGlobalRanking: (type: 'diario' | 'semanal' | 'geral') => RankingEntry[];
+  monthlyTotalSeconds: number;
+  getGlobalRanking: (type: 'diario' | 'semanal' | 'mensal' | 'geral') => RankingEntry[];
   fetchRanking: (force?: boolean) => Promise<void>;
   isRankingLoading: boolean;
-  dbStats: { today: number; weekly: number; total: number };
+  dbStats: { today: number; weekly: number; monthly: number; total: number };
   rankingData: {
     daily: RankingEntry[];
     weekly: RankingEntry[];
+    monthly: RankingEntry[];
     total: RankingEntry[];
     lastFetched?: number;
   };
@@ -213,7 +215,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-    return { today: 0, weekly: 0, total: 0 };
+    return { today: 0, weekly: 0, monthly: 0, total: 0 };
   });
   const [subjectsData, setSubjectsData] = useState<SubjectData[]>(() => {
     if (typeof window !== 'undefined') {
@@ -298,9 +300,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const [rankingData, setRankingData] = useState<{
     daily: RankingEntry[];
     weekly: RankingEntry[];
+    monthly: RankingEntry[];
     total: RankingEntry[];
     lastFetched?: number;
-  }>({ daily: [], weekly: [], total: [] });
+  }>({ daily: [], weekly: [], monthly: [], total: [] });
   const [isRankingLoading, setIsRankingLoading] = useState(false);
 
   const [totalBankQuestions, setTotalBankQuestions] = useState<number>(0);
@@ -346,7 +349,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   });
 
   // Derived counters — recomputed every second by the heartbeat
-  const [sessionBaseStats, setSessionBaseStats] = useState({ today: 0, weekly: 0, total: 0 });
+  const [sessionBaseStats, setSessionBaseStats] = useState({ today: 0, weekly: 0, monthly: 0, total: 0 });
   const [stopwatchSessionSeconds, setStopwatchSessionSeconds] = useState(0);
   const [stopwatchAccumulated, setStopwatchAccumulated] = useState(0);
   const [stopwatchTime, setStopwatchTime] = useState(0);
@@ -459,6 +462,13 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     return Math.round(weeklyData.reduce((acc, curr) => acc + curr.value, 0) * 3600);
   }, [stopwatchActive, sessionBaseStats.weekly, stopwatchSessionSeconds, weeklyData]);
 
+  const monthlyTotalSeconds = useMemo(() => {
+    if (stopwatchActive) {
+      return sessionBaseStats.monthly + stopwatchSessionSeconds;
+    }
+    return sessionBaseStats.monthly || dbStats.monthly || 0;
+  }, [stopwatchActive, sessionBaseStats.monthly, stopwatchSessionSeconds, dbStats.monthly]);
+
   const liveWeeklyData = useMemo(() => {
     const now = new Date();
     const brDate = getBrasiliaDate(now);
@@ -564,6 +574,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         // Map view data to our ranking structure
         const daily: RankingEntry[] = [];
         const weekly: RankingEntry[] = [];
+        const monthly: RankingEntry[] = [];
         const total: RankingEntry[] = [];
 
         rankingStats.forEach((stat: any) => {
@@ -571,18 +582,20 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             email: stat.user_id,
             name: stat.name || 'Soldado',
             photo: stat.photo_url,
-            seconds: 0, // Placeholder
+            seconds: 0,
             totalSeconds: stat.total_seconds_all_time || 0
           };
 
           daily.push({ ...entry, seconds: stat.daily_seconds || 0 });
           weekly.push({ ...entry, seconds: stat.weekly_seconds || 0 });
+          monthly.push({ ...entry, seconds: stat.monthly_seconds || 0 });
           total.push({ ...entry, seconds: stat.total_seconds_all_time || 0 });
         });
 
         setRankingData({
           daily: daily.sort((a, b) => b.seconds - a.seconds),
           weekly: weekly.sort((a, b) => b.seconds - a.seconds),
+          monthly: monthly.sort((a, b) => b.seconds - a.seconds),
           total: total.sort((a, b) => b.seconds - a.seconds),
           lastFetched: Date.now()
         });
@@ -595,6 +608,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             setDbStats({
               today: myStat.daily_seconds || 0,
               weekly: myStat.weekly_seconds || 0,
+              monthly: myStat.monthly_seconds || 0,
               total: myStat.total_seconds_all_time || 0
             });
           }
@@ -938,9 +952,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       const profileTotal = profileMap[user.id]?.total_seconds || 0;
       const baseToday = dailySubjectsData.reduce((a, c) => a + c.seconds, 0);
       const baseWeekly = Math.round(weeklyData.reduce((a, c) => a + c.value, 0) * 3600);
+      const baseMonthly = dbStats.monthly || 0;
       const baseTotal = profileTotal;
 
-      setSessionBaseStats({ today: baseToday, weekly: baseWeekly, total: baseTotal });
+      setSessionBaseStats({ today: baseToday, weekly: baseWeekly, monthly: baseMonthly, total: baseTotal });
       setActiveSessionInitialSeconds(baseToday);
       setSessionStartedAt(now);
       sessionStartedAtRef.current = now;
@@ -1004,7 +1019,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       setStopwatchAccumulated(0);
       setStopwatchSessionSeconds(0);
       setActiveSessionInitialSeconds(0);
-      setSessionBaseStats({ today: 0, weekly: 0, total: 0 });
+      setSessionBaseStats({ today: 0, weekly: 0, monthly: 0, total: 0 });
 
       localStorage.setItem('stopwatchActive', 'false');
       localStorage.removeItem('sessionStartedAt');
@@ -1038,7 +1053,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     setStopwatchTime(0);
     setStopwatchAccumulated(0);
     setStopwatchSessionSeconds(0);
-    setSessionBaseStats({ today: 0, weekly: 0, total: 0 });
+    setSessionBaseStats({ today: 0, weekly: 0, monthly: 0, total: 0 });
 
     localStorage.setItem('stopwatchActive', 'false');
     localStorage.removeItem('sessionStartedAt');
@@ -1070,10 +1085,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     return 0;
   });
 
-  const getGlobalRanking = useCallback((type: 'diario' | 'semanal' | 'geral'): RankingEntry[] => {
+  const getGlobalRanking = useCallback((type: 'diario' | 'semanal' | 'mensal' | 'geral'): RankingEntry[] => {
     const keyMap = {
       'diario': 'daily',
       'semanal': 'weekly',
+      'mensal': 'monthly',
       'geral': 'total'
     } as const;
 
@@ -1107,6 +1123,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           liveSeconds = todayTotalSeconds;
         } else if (type === 'semanal') {
           liveSeconds = weeklyTotalSeconds;
+        } else if (type === 'mensal') {
+          liveSeconds = monthlyTotalSeconds;
         } else {
           liveSeconds = allTimeSeconds;
         }
@@ -1146,7 +1164,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       if (b.seconds !== a.seconds) return b.seconds - a.seconds;
       return a.name.localeCompare(b.name); 
     });
-  }, [rankingData, user, todayTotalSeconds, weeklyTotalSeconds, onlineUserIds, profileMap, presenceMetadata, allTimeSeconds, totalStudyTime]);
+  }, [rankingData, user, todayTotalSeconds, weeklyTotalSeconds, monthlyTotalSeconds, onlineUserIds, profileMap, presenceMetadata, allTimeSeconds, totalStudyTime]);
 
   const addSubject = useCallback(async (name: string) => {
     if (!user) return;
@@ -1418,9 +1436,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             setStopwatchAccumulated(0);
             setActiveSessionInitialSeconds(initial);
             const recoveryWeekly = Math.round(weeklyData.reduce((a, c) => a + c.value, 0) * 3600);
+            const recoveryMonthly = dbStats.monthly || 0;
             setSessionBaseStats({
               today: initial,
               weekly: recoveryWeekly,
+              monthly: recoveryMonthly,
               total: profileTotalSecs
             });
             setStopwatchActive(true);
@@ -1630,18 +1650,24 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     mondayBrDate.setDate(now.getDate() - diffToMonday);
     const mondayBrasilia = getBrasiliaISO(mondayBrDate);
 
+    const monthFirstBrDate = new Date(now);
+    monthFirstBrDate.setDate(1);
+    const monthFirstBrasilia = getBrasiliaISO(monthFirstBrDate);
+
     const dailyMap: Record<string, number> = {};
     const weeklyMap: Record<string, number> = {};
+    const monthlyMap: Record<string, number> = {};
 
     allSessions.forEach(session => {
       const date = new Date(session.created_at);
       const sessionDateBr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(date);
-      
+
       const seconds = session.duration_seconds ?? (session.duration_minutes * 60);
       const uid = session.user_id;
 
       if (sessionDateBr === todayBrasilia) dailyMap[uid] = (dailyMap[uid] || 0) + seconds;
       if (sessionDateBr >= mondayBrasilia) weeklyMap[uid] = (weeklyMap[uid] || 0) + seconds;
+      if (sessionDateBr >= monthFirstBrasilia) monthlyMap[uid] = (monthlyMap[uid] || 0) + seconds;
     });
 
     const mapToRanking = (map: Record<string, number>, useTotalSeconds = false) => {
@@ -1676,7 +1702,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     setRankingData({
       daily: mapToRanking(dailyMap),
       weekly: mapToRanking(weeklyMap),
-      total: mapToRanking({}, true), // Use total_seconds from profiles
+      monthly: mapToRanking(monthlyMap),
+      total: mapToRanking({}, true),
       lastFetched: Date.now()
     });
   }, [allSessions, allProfiles, user, profileMap]);
@@ -2018,6 +2045,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       todayTotalSeconds,
       allTimeSeconds,
       weeklyTotalSeconds,
+      monthlyTotalSeconds,
       totalStudyTime,
       isStudying,
       weeklyGoalHours,
